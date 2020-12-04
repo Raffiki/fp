@@ -64,8 +64,20 @@ updateQuadrant q 3 1 c = updateCell (row3 . cell1) q c
 updateQuadrant q 3 2 c = updateCell (row3 . cell2) q c
 updateQuadrant q 3 3 c = updateCell (row3 . cell3) q c
 
--- cellLens:: Lens' Quadrant Cell
--- cellLens =
+getRow :: Int -> State -> [Cell]
+getRow nr (State _ q1 q2 q3 q4)
+  | nr <= 3 = concat $ _getRow nr <$> [q1, q2]
+  | otherwise = concat $ _getRow (nr - 3) <$> [q3, q4]
+
+getColumn :: Int -> State -> [Cell]
+getColumn nr (State _ q1 q2 q3 q4)
+  | nr <= 3 = concat $ _getRow nr . transposeQ <$> [q1, q3]
+  | otherwise = concat $ _getRow (nr - 3) . transposeQ <$> [q2, q4]
+
+_getRow :: Int -> Quadrant -> [Cell]
+_getRow 1 (Quadrant _ (Row c1 c2 c3) _ _) = [c1, c2, c3]
+_getRow 2 (Quadrant _ _ (Row c1 c2 c3) _) = [c1, c2, c3]
+_getRow 3 (Quadrant _ _ _ (Row c1 c2 c3)) = [c1, c2, c3]
 
 updateCell :: Lens' Quadrant Cell -> Quadrant -> Cell -> Either Message Quadrant
 updateCell l q c = case view l q of
