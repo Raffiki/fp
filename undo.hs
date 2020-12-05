@@ -1,5 +1,6 @@
-{-# LANGUAGE DatatypeContexts #-}
-{-# OPTIONS_GHC -fglasgow-exts #-}
+{-# LANGUAGE DatatypeContexts #-} 
+{-# LANGUAGE FunctionalDependencies #-} 
+{-# LANGUAGE MultiParamTypeClasses #-} 
 
 module Undo where
 
@@ -50,7 +51,7 @@ instance (Monad m) => MonadUndo s (UndoT s m) where
     checkpoint = UndoT $ do
         s <- liftM current get
         put $ blankHistory s
-
+        
 evalUndoT (UndoT x) s = evalStateT x (blankHistory s)
 execUndoT (UndoT x) s = liftM current $ execStateT x (blankHistory s)
 
@@ -67,9 +68,8 @@ type GameState = (Bool, String)
 playGame :: String -> Undo GameState GameState
 playGame x = do
     (done, res) <- get
-    _ <- put (done, res ++ x)
     _ <- (case x of
-            "undo" -> undo 
+            "undo" -> (\_ -> ()) <$> undo 
             _      -> put (done, res ++ x))
     get
 
@@ -81,5 +81,8 @@ main = loop startState
     loop s = do
       input <- getLine
       let (d, i) = evalUndo (playGame input) s
+      _ <- print i
+
+      let (d, i) = execUndo (playGame input) s
       _ <- print i
       loop (d, i)
