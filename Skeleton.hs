@@ -14,7 +14,7 @@ data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (Quadra
 
 data State = State {_roundNumber :: Int, _q1 :: Quadrant, _q2 :: Quadrant, _q3 :: Quadrant, _q4 :: Quadrant}
 
-data Cell = Black | White | Clean
+data Cell = Black | White | Clean deriving (Eq)
 
 data Continue a = Done a | NotDone a
 
@@ -110,8 +110,15 @@ initialState = State 0 (mkInitialQuadrant One) (mkInitialQuadrant Two) (mkInitia
 
 isDone :: State -> Bool
 isDone s = False
-
--- isDone (State _ (_ (a1 a2 a3) (b1 b2 b3) (c1 c2 c3)) (_ (a4 a5 a6) (b4 b5 b6) (c4 c5 c6)) (_ (d1 d2 d3) (e1 e2 e3) (f1 f2 f3)) (_ (d4 d5 d6) (e4 e5 e6) (f4 f5 f6)) )= False
+isDone (State _ a1 a2 a3 a4) = False
+isDone
+  ( State
+      _
+      (Quadrant _ (Row a1 a2 a3) (Row b1 b2 b3) (Row c1 c2 c3))
+      (Quadrant _ (Row a4 a5 a6) (Row b4 b5 b6) (Row c4 c5 c6))
+      (Quadrant _ (Row d1 d2 d3) (Row e1 e2 e3) (Row f1 f2 f3))
+      (Quadrant _ (Row d4 d5 d6) (Row e4 e5 e6) (Row f4 f5 f6))
+    ) = allBlackOrWhite [a1, a2, a3, b1, b2, b3, c1, c2, c3]
 
 verifyDone :: Command -> State -> State -> (Message, Maybe State)
 verifyDone (Command _ _ Nothing) oldState newState =
@@ -150,7 +157,7 @@ getQuadrantLens quadrantId
   | quadrantId == Four = q4
 
 applyCommand :: State -> Command -> Either Message State
-applyCommand s c = nextState `fmap` applyRotation c `fmap` setQuadrant s `fmap` updateQuadrant quadrant row col cell
+applyCommand s c = (nextState . applyRotation c) . setQuadrant s <$> updateQuadrant quadrant row col cell
   where
     quadrantId = getQuadrantId c
     quadrant = getQuadrant s quadrantId
@@ -222,3 +229,10 @@ parse args = p (args =~ "^([a-f])([1-6])((I|II|III|IV)(r|l))?$" :: (String, Stri
 
     rowIndex row = fromMaybe (error "row index out of bounds") $ row `elemIndex` ["a", "b", "c", "d", "e", "f"]
     colIndex col = fromMaybe (error "column index out of bounds") $ col `elemIndex` ["1", "2", "3", "4", "5", "6"]
+
+allSameOf :: (Eq a) => [a] -> [a] -> Bool
+allSameOf _ [] = True
+allSameOf legalValues (x : xs) = elem x legalValues && all (== x) xs
+
+allBlackOrWhite :: [Cell] -> Bool
+allBlackOrWhite = allSameOf [Black, White]
