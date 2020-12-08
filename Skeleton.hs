@@ -176,27 +176,27 @@ currentlyPlaying s = case mod (_roundNumber s) 2 of
 
 prompt :: State -> Message
 prompt (State _ q1 q2 q3 q4) =
-  show "   1  2  3  4  5  6" ++ "\n a "
+  "    1  2  3  4  5  6" ++ "\n a "
     ++ show (_row1 q1)
     ++ "|"
     ++ show (_row1 q2)
-    ++ "\n b "
+    ++ "\n           |\n b "
     ++ show (_row2 q1)
     ++ "|"
     ++ show (_row2 q2)
-    ++ "\n c "
+    ++ "\n           |\n c "
     ++ show (_row3 q1)
     ++ "|"
     ++ show (_row3 q2)
-    ++ "\n d "
+    ++ "\n ------------------- \n d "
     ++ show (_row1 q3)
     ++ "|"
     ++ show (_row1 q4)
-    ++ "\n e "
+    ++ "\n           |\n e "
     ++ show (_row2 q3)
     ++ "|"
     ++ show (_row2 q4)
-    ++ "\n f "
+    ++ "\n           |\n f "
     ++ show (_row3 q3)
     ++ "|"
     ++ show (_row3 q4)
