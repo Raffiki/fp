@@ -74,6 +74,14 @@ getColumn nr (State _ q1 q2 q3 q4)
   | nr <= 3 = concat $ _getRow nr . transposeQ <$> [q1, q3]
   | otherwise = concat $ _getRow (nr - 3) . transposeQ <$> [q2, q4]
 
+getDiagonalq1q4 :: State -> [Cell]
+getDiagonalq1q4 (State _ q1 _ _ q4) =
+  [view (row1 . cell1) q1, view (row2 . cell2) q1, view (row3 . cell3) q1, view (row1 . cell1) q4, view (row2 . cell2) q4, view (row3 . cell3) q4]
+
+getDiagonalq2q2 :: State -> [Cell]
+getDiagonalq2q2 (State _ _ q2 q3 _) =
+  [view (row1 . cell3) q2, view (row2 . cell2) q2, view (row3 . cell1) q2, view (row1 . cell3) q3, view (row2 . cell2) q3, view (row3 . cell1) q3]
+
 _getRow :: Int -> Quadrant -> [Cell]
 _getRow 1 (Quadrant _ (Row c1 c2 c3) _ _) = [c1, c2, c3]
 _getRow 2 (Quadrant _ _ (Row c1 c2 c3) _) = [c1, c2, c3]
@@ -109,16 +117,7 @@ initialState :: State
 initialState = State 0 (mkInitialQuadrant One) (mkInitialQuadrant Two) (mkInitialQuadrant Three) (mkInitialQuadrant Four)
 
 isDone :: State -> Bool
-isDone s = False
-isDone (State _ a1 a2 a3 a4) = False
-isDone
-  ( State
-      _
-      (Quadrant _ (Row a1 a2 a3) (Row b1 b2 b3) (Row c1 c2 c3))
-      (Quadrant _ (Row a4 a5 a6) (Row b4 b5 b6) (Row c4 c5 c6))
-      (Quadrant _ (Row d1 d2 d3) (Row e1 e2 e3) (Row f1 f2 f3))
-      (Quadrant _ (Row d4 d5 d6) (Row e4 e5 e6) (Row f4 f5 f6))
-    ) = allBlackOrWhite [a1, a2, a3, b1, b2, b3, c1, c2, c3]
+isDone s = any allBlackOrWhite (getDiagonalq1q4 s : getDiagonalq2q2 s : map (flip getRow s) [1 .. 6] ++ map (flip getColumn s) [1 .. 6])
 
 verifyDone :: Command -> State -> State -> (Message, Maybe State)
 verifyDone (Command _ _ Nothing) oldState newState =
@@ -165,10 +164,8 @@ applyCommand s c = (nextState . applyRotation c) . setQuadrant s <$> updateQuadr
     col = (_colIdx c `mod` 3) + 1
     cell = currentlyPlaying s
 
---turn =
-
 step :: State -> Command -> (Message, Maybe State)
-step s c = case applyCommand s c of --verifyDone c `fmap`
+step s c = case applyCommand s c of
   Left message -> (message, Just s)
   Right newState -> verifyDone c s newState
 
