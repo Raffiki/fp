@@ -1,0 +1,2 @@
+2020-12-06 20:46:01.425413383000 [655447(ThreadId 17)] ERROR APP - user error (loaded module can not find from path. </home/raf/Projects/vub/functional_programming/quicksort-par.hs> [])
+2020-12-06 20:46:01.460159388000 [655447(ThreadId 17)] ERROR APP - start debugging failed. user error (ExecResult not found.) : Left "user error (ExecResult not found.)"
