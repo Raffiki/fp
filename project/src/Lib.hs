@@ -8,6 +8,9 @@ module Lib
     parse,
     step,
     randomPlayer,
+    Player,
+    Board,
+    hasWinner,
   )
 where
 
@@ -24,7 +27,7 @@ data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (Quadra
 
 data Player = BlackP | WhiteP deriving (Show, Enum, Bounded)
 
-data State = State {_roundNumber :: Int, _player :: Player, _q1 :: Quadrant, _q2 :: Quadrant, _q3 :: Quadrant, _q4 :: Quadrant}
+data Board = Board {_roundNumber :: Int, _player :: Player, _q1 :: Quadrant, _q2 :: Quadrant, _q3 :: Quadrant, _q4 :: Quadrant}
 
 data Cell = Black | White | Clean deriving (Eq)
 
@@ -58,18 +61,18 @@ data Quadrant = Quadrant
     _row3 :: Row
   }
 
+makeLenses ''Board
 makeLenses ''Quadrant
 makeLenses ''Row
-makeLenses ''State
 
 nextPlayer :: Player -> Player
 nextPlayer BlackP = WhiteP
 nextPlayer WhiteP = BlackP
 
-nextState :: State -> State
-nextState = over roundNumber (+ 1) . over player nextPlayer
+nextRound :: Board -> Board
+nextRound = over roundNumber (+ 1) . over player nextPlayer
 
-setQuadrant :: State -> Quadrant -> State
+setQuadrant :: Board -> Quadrant -> Board
 setQuadrant s q = set l q s
   where
     l
@@ -89,22 +92,22 @@ updateQuadrant q 3 1 c = updateCell (row3 . cell1) q c
 updateQuadrant q 3 2 c = updateCell (row3 . cell2) q c
 updateQuadrant q 3 3 c = updateCell (row3 . cell3) q c
 
-getRow :: Int -> State -> [Cell]
-getRow nr (State _ _ q1 q2 q3 q4)
+getRow :: Int -> Board -> [Cell]
+getRow nr (Board _ _ q1 q2 q3 q4)
   | nr <= 3 = concat $ _getRow nr <$> [q1, q2]
   | otherwise = concat $ _getRow (nr - 3) <$> [q3, q4]
 
-getColumn :: Int -> State -> [Cell]
-getColumn nr (State _ _ q1 q2 q3 q4)
+getColumn :: Int -> Board -> [Cell]
+getColumn nr (Board _ _ q1 q2 q3 q4)
   | nr <= 3 = concat $ _getRow nr . transposeQ <$> [q1, q3]
   | otherwise = concat $ _getRow (nr - 3) . transposeQ <$> [q2, q4]
 
-getDiagonalq1q4 :: State -> [Cell]
-getDiagonalq1q4 (State _ _ q1 _ _ q4) =
+getDiagonalq1q4 :: Board -> [Cell]
+getDiagonalq1q4 (Board _ _ q1 _ _ q4) =
   [view (row1 . cell1) q1, view (row2 . cell2) q1, view (row3 . cell3) q1, view (row1 . cell1) q4, view (row2 . cell2) q4, view (row3 . cell3) q4]
 
-getDiagonalq2q2 :: State -> [Cell]
-getDiagonalq2q2 (State _ _ _ q2 q3 _) =
+getDiagonalq2q2 :: Board -> [Cell]
+getDiagonalq2q2 (Board _ _ _ q2 q3 _) =
   [view (row1 . cell3) q2, view (row2 . cell2) q2, view (row3 . cell1) q2, view (row1 . cell3) q3, view (row2 . cell2) q3, view (row3 . cell1) q3]
 
 _getRow :: Int -> Quadrant -> [Cell]
@@ -138,21 +141,24 @@ mkInitialQuadrant number =
       _row3 = Row Clean Clean Clean
     }
 
-initialState :: Player -> State
-initialState p = State 0 p (mkInitialQuadrant One) (mkInitialQuadrant Two) (mkInitialQuadrant Three) (mkInitialQuadrant Four)
+initialState :: Player -> Board
+initialState p = Board 0 p (mkInitialQuadrant One) (mkInitialQuadrant Two) (mkInitialQuadrant Three) (mkInitialQuadrant Four)
 
-isDone :: State -> Bool
-isDone s = any allBlackOrWhite (getDiagonalq1q4 s : getDiagonalq2q2 s : map (flip getRow s) [1 .. 6] ++ map (flip getColumn s) [1 .. 6])
+hasWinner :: Board -> Maybe Player
+hasWinner s =
+  if any allBlackOrWhite (getDiagonalq1q4 s : getDiagonalq2q2 s : map (flip getRow s) [1 .. 6] ++ map (flip getColumn s) [1 .. 6])
+    then Just $ view player s
+    else Nothing
 
-verifyDone :: Command -> State -> State -> (Message, Maybe State)
+verifyDone :: Command -> Board -> Board -> (Message, Maybe Board)
 verifyDone (Command _ _ Nothing) oldState newState =
-  if isDone newState
-    then ("You won", Nothing)
-    else ("You can only omit quadrant rotation when you finish the game", Just oldState)
+  case hasWinner newState of
+    Just p -> (show p ++ " won", Nothing)
+    Nothing -> ("You can only omit quadrant rotation when you finish the game", Just oldState)
 verifyDone _ _ newState =
-  if isDone newState
-    then ("You won", Nothing)
-    else ("", Just newState)
+  case hasWinner newState of
+    Just p -> (show p ++ " won", Nothing)
+    Nothing -> ("", Just newState)
 
 getQuadrantId :: Command -> QuadrantId
 getQuadrantId (Command r c _)
@@ -161,20 +167,20 @@ getQuadrantId (Command r c _)
   | c < 3 = Three
   | otherwise = Four
 
-getQuadrant :: State -> QuadrantId -> Quadrant
+getQuadrant :: Board -> QuadrantId -> Quadrant
 getQuadrant s qId
   | qId == One = _q1 s
   | qId == Two = _q2 s
   | qId == Three = _q3 s
   | qId == Four = _q4 s
 
-applyRotation :: Command -> State -> State
+applyRotation :: Command -> Board -> Board
 applyRotation (Command _ _ Nothing) s = s
 applyRotation (Command _ _ (Just (quadrantId, "l"))) s = setQuadrant s $ rotateLeft $ getQuadrant s quadrantId
 applyRotation (Command _ _ (Just (quadrantId, "r"))) s = setQuadrant s $ rotateRight $ getQuadrant s quadrantId
 
-applyCommand :: State -> Command -> Either Message State
-applyCommand s c = (nextState . applyRotation c) . setQuadrant s <$> updateQuadrant quadrant row col cell
+applyCommand :: Board -> Command -> Either Message Board
+applyCommand s c = (nextRound . applyRotation c) . setQuadrant s <$> updateQuadrant quadrant row col cell
   where
     quadrantId = getQuadrantId c
     quadrant = getQuadrant s quadrantId
@@ -182,18 +188,18 @@ applyCommand s c = (nextState . applyRotation c) . setQuadrant s <$> updateQuadr
     col = (_colIdx c `mod` 3) + 1
     cell = currentlyPlaying s
 
-step :: State -> Command -> (Message, Maybe State)
+step :: Board -> Command -> (Message, Maybe Board)
 step s c = case applyCommand s c of
   Left message -> (message, Just s)
   Right newState -> verifyDone c s newState
 
-currentlyPlaying :: State -> Cell
+currentlyPlaying :: Board -> Cell
 currentlyPlaying s = case mod (_roundNumber s) 2 of
   0 -> Black
   1 -> White
 
-prompt :: State -> Message
-prompt (State _ _ q1 q2 q3 q4) =
+prompt :: Board -> Message
+prompt (Board _ _ q1 q2 q3 q4) =
   "    1  2  3  4  5  6" ++ "\n a "
     ++ show (_row1 q1)
     ++ "|"
