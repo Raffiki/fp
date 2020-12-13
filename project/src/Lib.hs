@@ -4,32 +4,44 @@
 
 module Lib
   ( prompt,
-    initialState,
-    parse,
+    initialBoard,
     step,
     randomPlayer,
-    Player,
+    Player (..),
     Board,
-    hasWinner,
+    getWinners,
+    nextPlayer,
+    Cell (..),
+    getRow,
+    getColumn,
+    getDiagonalq1q4,
+    getDiagonalq2q2,
+    Command (Command),
+    allPossibleCommands,
+    applyCommand,
+    QuadrantId (..),
   )
 where
 
-import Control.Lens
-import Control.Lens.TH
-import Data.List
-import Data.Maybe
-import System.Random
-import Text.Regex.Posix
+import Control.Lens (Lens', makeLenses, over, set, view)
+import Control.Lens.TH ()
+import qualified Data.Set as Set
+import System.Random (Random (random, randomR), newStdGen)
 
 type Message = String
 
 data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (QuadrantId, String)} deriving (Show)
 
-data Player = BlackP | WhiteP deriving (Show, Enum, Bounded)
+data Board = Board {_player :: Player, _q1 :: Quadrant, _q2 :: Quadrant, _q3 :: Quadrant, _q4 :: Quadrant}
 
-data Board = Board {_roundNumber :: Int, _player :: Player, _q1 :: Quadrant, _q2 :: Quadrant, _q3 :: Quadrant, _q4 :: Quadrant}
+data Cell = B | W | E deriving (Eq)
 
-data Cell = Black | White | Clean deriving (Eq)
+instance Show Cell where
+  show B = "b"
+  show W = "w"
+  show E = "."
+
+data Player = Black | White deriving (Eq, Ord, Show, Enum, Bounded)
 
 instance Random Player where
   randomR (a, b) g =
@@ -41,11 +53,6 @@ randomPlayer :: IO Player
 randomPlayer = do
   g <- newStdGen
   return . fst $ random g
-
-instance Show Cell where
-  show Black = "b"
-  show White = "w"
-  show Clean = "."
 
 data QuadrantId = One | Two | Three | Four deriving (Eq, Show)
 
@@ -61,16 +68,25 @@ data Quadrant = Quadrant
     _row3 :: Row
   }
 
-makeLenses ''Board
 makeLenses ''Quadrant
 makeLenses ''Row
+makeLenses ''Board
+
+allPossibleCommands :: [Command]
+allPossibleCommands =
+  [ Command r c (Just (q, d))
+    | r <- [1 .. 6],
+      c <- [1 .. 6],
+      q <- [One, Two, Three, Four],
+      d <- ["l", "r"]
+  ]
 
 nextPlayer :: Player -> Player
-nextPlayer BlackP = WhiteP
-nextPlayer WhiteP = BlackP
+nextPlayer Black = White
+nextPlayer White = Black
 
 nextRound :: Board -> Board
-nextRound = over roundNumber (+ 1) . over player nextPlayer
+nextRound = over player nextPlayer
 
 setQuadrant :: Board -> Quadrant -> Board
 setQuadrant s q = set l q s
@@ -93,21 +109,21 @@ updateQuadrant q 3 2 c = updateCell (row3 . cell2) q c
 updateQuadrant q 3 3 c = updateCell (row3 . cell3) q c
 
 getRow :: Int -> Board -> [Cell]
-getRow nr (Board _ _ q1 q2 q3 q4)
+getRow nr (Board _ q1 q2 q3 q4)
   | nr <= 3 = concat $ _getRow nr <$> [q1, q2]
   | otherwise = concat $ _getRow (nr - 3) <$> [q3, q4]
 
 getColumn :: Int -> Board -> [Cell]
-getColumn nr (Board _ _ q1 q2 q3 q4)
+getColumn nr (Board _ q1 q2 q3 q4)
   | nr <= 3 = concat $ _getRow nr . transposeQ <$> [q1, q3]
   | otherwise = concat $ _getRow (nr - 3) . transposeQ <$> [q2, q4]
 
 getDiagonalq1q4 :: Board -> [Cell]
-getDiagonalq1q4 (Board _ _ q1 _ _ q4) =
+getDiagonalq1q4 (Board _ q1 _ _ q4) =
   [view (row1 . cell1) q1, view (row2 . cell2) q1, view (row3 . cell3) q1, view (row1 . cell1) q4, view (row2 . cell2) q4, view (row3 . cell3) q4]
 
 getDiagonalq2q2 :: Board -> [Cell]
-getDiagonalq2q2 (Board _ _ _ q2 q3 _) =
+getDiagonalq2q2 (Board _ _ q2 q3 _) =
   [view (row1 . cell3) q2, view (row2 . cell2) q2, view (row3 . cell1) q2, view (row1 . cell3) q3, view (row2 . cell2) q3, view (row3 . cell1) q3]
 
 _getRow :: Int -> Quadrant -> [Cell]
@@ -117,9 +133,9 @@ _getRow 3 (Quadrant _ _ _ (Row c1 c2 c3)) = [c1, c2, c3]
 
 updateCell :: Lens' Quadrant Cell -> Quadrant -> Cell -> Either Message Quadrant
 updateCell l q c = case view l q of
-  Black -> Left "Cannot update cell already occupied by Black"
-  White -> Left "Cannot update cell already occupied by Left"
-  Clean -> Right $ set l c q
+  B -> Left "Cannot update cell already occupied by Black"
+  W -> Left "Cannot update cell already occupied by Left"
+  E -> Right $ set l c q
 
 reverseQ :: Quadrant -> Quadrant
 reverseQ (Quadrant id row1 row2 row3) = Quadrant id row3 row2 row1
@@ -133,32 +149,43 @@ rotateLeft = reverseQ . transposeQ
 rotateRight :: Quadrant -> Quadrant
 rotateRight = transposeQ . reverseQ
 
+mkInitialQuadrant :: QuadrantId -> Quadrant
 mkInitialQuadrant number =
   Quadrant
     { _quadrantId = number,
-      _row1 = Row Clean Clean Clean,
-      _row2 = Row Clean Clean Clean,
-      _row3 = Row Clean Clean Clean
+      _row1 = Row E E E,
+      _row2 = Row E E E,
+      _row3 = Row E E E
     }
 
-initialState :: Player -> Board
-initialState p = Board 0 p (mkInitialQuadrant One) (mkInitialQuadrant Two) (mkInitialQuadrant Three) (mkInitialQuadrant Four)
+initialBoard :: Player -> Board
+initialBoard p = Board p (mkInitialQuadrant One) (mkInitialQuadrant Two) (mkInitialQuadrant Three) (mkInitialQuadrant Four)
 
-hasWinner :: Board -> Maybe Player
-hasWinner s =
-  if any allBlackOrWhite (getDiagonalq1q4 s : getDiagonalq2q2 s : map (flip getRow s) [1 .. 6] ++ map (flip getColumn s) [1 .. 6])
-    then Just $ view player s
-    else Nothing
+maybeToSet :: Maybe a -> Set.Set a
+maybeToSet (Just a) = Set.singleton a
+maybeToSet Nothing = Set.empty
+
+-- There is a possibility both players win by a single move
+getWinners :: Board -> Set.Set Player
+getWinners b =
+  mconcat $
+    maybeToSet
+      . fiveInARow
+      <$> ( getDiagonalq1q4 b :
+            getDiagonalq2q2 b :
+            fmap (`getRow` b) [1 .. 6]
+              ++ fmap (`getColumn` b) [1 .. 6]
+          )
 
 verifyDone :: Command -> Board -> Board -> (Message, Maybe Board)
-verifyDone (Command _ _ Nothing) oldState newState =
-  case hasWinner newState of
-    Just p -> (show p ++ " won", Nothing)
-    Nothing -> ("You can only omit quadrant rotation when you finish the game", Just oldState)
-verifyDone _ _ newState =
-  case hasWinner newState of
-    Just p -> (show p ++ " won", Nothing)
-    Nothing -> ("", Just newState)
+verifyDone (Command _ _ Nothing) oldBoard newBoard =
+  if _player oldBoard `elem` getWinners newBoard
+    then ("You won", Nothing)
+    else ("You can only omit quadrant rotation when *you* win the game", Just oldBoard)
+verifyDone _ _ newBoard = case Set.elems (getWinners newBoard) of
+  [_, _] -> ("You both won", Nothing)
+  [winner] -> (show winner ++ " won", Nothing)
+  _ -> ("", Just newBoard)
 
 getQuadrantId :: Command -> QuadrantId
 getQuadrantId (Command r c _)
@@ -168,11 +195,11 @@ getQuadrantId (Command r c _)
   | otherwise = Four
 
 getQuadrant :: Board -> QuadrantId -> Quadrant
-getQuadrant s qId
-  | qId == One = _q1 s
-  | qId == Two = _q2 s
-  | qId == Three = _q3 s
-  | qId == Four = _q4 s
+getQuadrant b qId
+  | qId == One = _q1 b
+  | qId == Two = _q2 b
+  | qId == Three = _q3 b
+  | qId == Four = _q4 b
 
 applyRotation :: Command -> Board -> Board
 applyRotation (Command _ _ Nothing) s = s
@@ -180,26 +207,23 @@ applyRotation (Command _ _ (Just (quadrantId, "l"))) s = setQuadrant s $ rotateL
 applyRotation (Command _ _ (Just (quadrantId, "r"))) s = setQuadrant s $ rotateRight $ getQuadrant s quadrantId
 
 applyCommand :: Board -> Command -> Either Message Board
-applyCommand s c = (nextRound . applyRotation c) . setQuadrant s <$> updateQuadrant quadrant row col cell
+applyCommand b c = (nextRound . applyRotation c) . setQuadrant b <$> updateQuadrant quadrant row col cell
   where
     quadrantId = getQuadrantId c
-    quadrant = getQuadrant s quadrantId
+    quadrant = getQuadrant b quadrantId
     row = (_rowIdx c `mod` 3) + 1
     col = (_colIdx c `mod` 3) + 1
-    cell = currentlyPlaying s
+    cell = case _player b of
+      Black -> B
+      White -> W
 
 step :: Board -> Command -> (Message, Maybe Board)
-step s c = case applyCommand s c of
-  Left message -> (message, Just s)
-  Right newState -> verifyDone c s newState
-
-currentlyPlaying :: Board -> Cell
-currentlyPlaying s = case mod (_roundNumber s) 2 of
-  0 -> Black
-  1 -> White
+step b c = case applyCommand b c of
+  Left message -> (message, Just b)
+  Right newBoard -> verifyDone c b newBoard
 
 prompt :: Board -> Message
-prompt (Board _ _ q1 q2 q3 q4) =
+prompt (Board _ q1 q2 q3 q4) =
   "    1  2  3  4  5  6" ++ "\n a "
     ++ show (_row1 q1)
     ++ "|"
@@ -226,22 +250,9 @@ prompt (Board _ _ q1 q2 q3 q4) =
     ++ show (_row3 q4)
     ++ "\n\n"
 
-parse :: String -> Maybe Command
-parse args = p (args =~ "^([a-f])([1-6])((I|II|III|IV)(r|l))?$" :: (String, String, String, [String]))
-  where
-    p (_, _, _, []) = Nothing
-    p (_, _, _, [row, col, "", "", ""]) = Just $ Command (rowIndex row) (colIndex col) Nothing
-    p (_, _, _, [row, col, _, "I", direction]) = Just $ Command (rowIndex row) (colIndex col) $ Just (One, direction)
-    p (_, _, _, [row, col, _, "II", direction]) = Just $ Command (rowIndex row) (colIndex col) $ Just (Two, direction)
-    p (_, _, _, [row, col, _, "III", direction]) = Just $ Command (rowIndex row) (colIndex col) $ Just (Three, direction)
-    p (_, _, _, [row, col, _, "IV", direction]) = Just $ Command (rowIndex row) (colIndex col) $ Just (Four, direction)
-
-    rowIndex row = fromMaybe (error "row index out of bounds") $ row `elemIndex` ["a", "b", "c", "d", "e", "f"]
-    colIndex col = fromMaybe (error "column index out of bounds") $ col `elemIndex` ["1", "2", "3", "4", "5", "6"]
-
-allSameOf :: (Eq a) => [a] -> [a] -> Bool
-allSameOf _ [] = True
-allSameOf legalValues (x : xs) = elem x legalValues && all (== x) xs
-
-allBlackOrWhite :: [Cell] -> Bool
-allBlackOrWhite = allSameOf [Black, White]
+fiveInARow :: [Cell] -> Maybe Player
+fiveInARow [_, B, B, B, B, B] = Just Black
+fiveInARow [B, B, B, B, B, _] = Just Black
+fiveInARow [_, W, W, W, W, W] = Just White
+fiveInARow [W, W, W, W, W, _] = Just White
+fiveInARow _ = Nothing
