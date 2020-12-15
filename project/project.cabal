@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4086bc6a67a8faef51ed6c1a105077c57753a7ae70eb8261ff70f72176c4cda8
+-- hash: fbc0e2650e0b4b92565e5eaeffade32390c4aa1a80b22abe414c02c0587ab5b1
 
 name:           project
 version:        0.1.0.0
@@ -36,7 +36,10 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
+    , deepseq
     , lens
+    , monad-par
+    , parallel
     , random
     , regex-posix
   default-language: Haskell2010
@@ -51,7 +54,10 @@ executable project-exe
   build-depends:
       base >=4.7 && <5
     , containers
+    , deepseq
     , lens
+    , monad-par
+    , parallel
     , project
     , random
     , regex-posix
@@ -68,7 +74,10 @@ test-suite project-test
   build-depends:
       base >=4.7 && <5
     , containers
+    , deepseq
     , lens
+    , monad-par
+    , parallel
     , project
     , random
     , regex-posix

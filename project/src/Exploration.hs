@@ -1,24 +1,18 @@
 module Exploration where
 
+import Control.Parallel.Strategies
+import Data.Either
 import qualified Data.List.NonEmpty as NonEmpty
 import Lib
-  ( Board,
-    Cell (B, W),
-    Player (..),
-    getColumn,
-    getDiagonalq1q4,
-    getDiagonalq2q2,
-    getRow,
-  )
 
 data Forest a = a :+ [Forest a]
 
+evalPar :: Board -> [Command] -> [Either Message Board]
+evalPar b cs = map (applyCommand b) cs `using` parList rseq
+
 buildForest :: Int -> Board -> Forest Board
 buildForest 0 b = b :+ []
--- buildForest n b = 
-
-
-
+buildForest n b = b :+ (buildForest (n - 1) <$> rights (evalPar b allPossibleCommands))
 
 minimax :: Player -> Forest Board -> Int
 minimax p (b :+ []) = fitness b

@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -20,19 +21,21 @@ module Lib
     allPossibleCommands,
     applyCommand,
     QuadrantId (..),
+    Message
   )
 where
 
 import Control.Lens (Lens', makeLenses, over, set, view)
 import Control.Lens.TH ()
 import qualified Data.Set as Set
+import GHC.Generics
 import System.Random (Random (random, randomR), newStdGen)
 
 type Message = String
 
 data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (QuadrantId, String)} deriving (Show)
 
-data Board = Board {_player :: Player, _q1 :: Quadrant, _q2 :: Quadrant, _q3 :: Quadrant, _q4 :: Quadrant}
+data Board = Board {_player :: Player, _q1 :: Quadrant, _q2 :: Quadrant, _q3 :: Quadrant, _q4 :: Quadrant} deriving (Generic)
 
 data Cell = B | W | E deriving (Eq)
 
