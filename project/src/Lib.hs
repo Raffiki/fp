@@ -6,11 +6,11 @@
 module Lib
   ( prompt,
     initialBoard,
-    step,
     randomPlayer,
     Player (..),
-    Board,
+    Board (..),
     getWinners,
+    hasWinner,
     nextPlayer,
     Cell (..),
     getRow,
@@ -21,12 +21,13 @@ module Lib
     allPossibleCommands,
     applyCommand,
     QuadrantId (..),
-    Message
+    Message,
   )
 where
 
 import Control.Lens (Lens', makeLenses, over, set, view)
 import Control.Lens.TH ()
+import Data.List.Extra
 import qualified Data.Set as Set
 import GHC.Generics
 import System.Random (Random (random, randomR), newStdGen)
@@ -169,26 +170,20 @@ maybeToSet (Just a) = Set.singleton a
 maybeToSet Nothing = Set.empty
 
 -- There is a possibility both players win by a single move
-getWinners :: Board -> Set.Set Player
+getWinners :: Board -> [Player]
 getWinners b =
-  mconcat $
-    maybeToSet
-      . fiveInARow
-      <$> ( getDiagonalq1q4 b :
-            getDiagonalq2q2 b :
-            fmap (`getRow` b) [1 .. 6]
-              ++ fmap (`getColumn` b) [1 .. 6]
-          )
+  Set.elems $
+    mconcat $
+      maybeToSet
+        . fiveInARow
+        <$> ( getDiagonalq1q4 b :
+              getDiagonalq2q2 b :
+              fmap (`getRow` b) [1 .. 6]
+                ++ fmap (`getColumn` b) [1 .. 6]
+            )
 
-verifyDone :: Command -> Board -> Board -> (Message, Maybe Board)
-verifyDone (Command _ _ Nothing) oldBoard newBoard =
-  if _player oldBoard `elem` getWinners newBoard
-    then ("You won", Nothing)
-    else ("You can only omit quadrant rotation when *you* win the game", Just oldBoard)
-verifyDone _ _ newBoard = case Set.elems (getWinners newBoard) of
-  [_, _] -> ("You both won", Nothing)
-  [winner] -> (show winner ++ " won", Nothing)
-  _ -> ("", Just newBoard)
+hasWinner :: Board -> Bool
+hasWinner b = notNull $ getWinners b
 
 getQuadrantId :: Command -> QuadrantId
 getQuadrantId (Command r c _)
@@ -219,11 +214,6 @@ applyCommand b c = (nextRound . applyRotation c) . setQuadrant b <$> updateQuadr
     cell = case _player b of
       Black -> B
       White -> W
-
-step :: Board -> Command -> (Message, Maybe Board)
-step b c = case applyCommand b c of
-  Left message -> (message, Just b)
-  Right newBoard -> verifyDone c b newBoard
 
 prompt :: Board -> Message
 prompt (Board _ q1 q2 q3 q4) =

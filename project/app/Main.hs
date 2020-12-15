@@ -33,3 +33,18 @@ main =
             Just c -> step s c
       putStrLn message
       loop newState
+
+step :: Board -> Command -> (Message, Maybe Board)
+step b c = case applyCommand b c of
+  Left message -> (message, Just b)
+  Right newBoard -> verifyDone c b newBoard
+
+verifyDone :: Command -> Board -> Board -> (Message, Maybe Board)
+verifyDone (Command _ _ Nothing) oldBoard newBoard =
+  if _player oldBoard `elem` getWinners newBoard
+    then ("You won", Nothing)
+    else ("You can only omit quadrant rotation when *you* win the game", Just oldBoard)
+verifyDone _ _ newBoard = case getWinners newBoard of
+  [_, _] -> ("You both won", Nothing)
+  [winner] -> (show winner ++ " won", Nothing)
+  _ -> ("", Just newBoard)

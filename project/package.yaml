@@ -28,6 +28,8 @@ dependencies:
 - regex-posix
 - lens
 - random
+- either
+- extra
 
 library:
   source-dirs: src

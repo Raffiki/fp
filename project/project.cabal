@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: fbc0e2650e0b4b92565e5eaeffade32390c4aa1a80b22abe414c02c0587ab5b1
+-- hash: dbc1e68138b0280f971e60b44f7fedce4dc5a6e40baf270fcde7f4d94a592187
 
 name:           project
 version:        0.1.0.0
@@ -37,6 +37,8 @@ library
       base >=4.7 && <5
     , containers
     , deepseq
+    , either
+    , extra
     , lens
     , monad-par
     , parallel
@@ -55,6 +57,8 @@ executable project-exe
       base >=4.7 && <5
     , containers
     , deepseq
+    , either
+    , extra
     , lens
     , monad-par
     , parallel
@@ -75,6 +79,8 @@ test-suite project-test
       base >=4.7 && <5
     , containers
     , deepseq
+    , either
+    , extra
     , lens
     , monad-par
     , parallel
