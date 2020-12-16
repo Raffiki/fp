@@ -8,12 +8,12 @@ import Lib
 
 data Forest a = a :+ [Forest a]
 
-evalPar :: Board -> [Command] -> [(Board, Bool)]
-evalPar b cs = rights (map result cs `using` parList rseq)
+evalPar :: (Board, Command) -> [Command] -> [((Board, Command), Bool)]
+evalPar (b, c) cs = rights (map result cs `using` parList rseq)
   where
-    result c = (\b -> (b, hasWinner b)) `mapRight` applyCommand b c
+    result c = (\b -> ((b, c), hasWinner b)) `mapRight` applyCommand b c
 
-buildForest :: Int -> (Board, Bool) -> Forest Board
+buildForest :: Int -> ((Board, Command), Bool) -> Forest (Board, Command)
 buildForest 0 (b, _) = b :+ []
 buildForest n (b, True) = b :+ [buildForest (n - 1) (b, True)]
 buildForest n (b, False) = b :+ (buildForest (n - 1) <$> evalPar b allPossibleCommands)
