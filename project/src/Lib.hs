@@ -34,7 +34,7 @@ import System.Random (Random (random, randomR), newStdGen)
 
 type Message = String
 
-data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (QuadrantId, String)} deriving (Show)
+data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (QuadrantId, String)} deriving (Eq, Ord, Show)
 
 data Board = Board {_player :: Player, _q1 :: Quadrant, _q2 :: Quadrant, _q3 :: Quadrant, _q4 :: Quadrant} deriving (Generic)
 
@@ -58,7 +58,7 @@ randomPlayer = do
   g <- newStdGen
   return . fst $ random g
 
-data QuadrantId = One | Two | Three | Four deriving (Eq, Show)
+data QuadrantId = One | Two | Three | Four deriving (Eq, Ord, Show)
 
 data Row = Row {_cell1 :: Cell, _cell2 :: Cell, _cell3 :: Cell}
 
@@ -79,8 +79,8 @@ makeLenses ''Board
 allPossibleCommands :: [Command]
 allPossibleCommands =
   [ Command r c (Just (q, d))
-    | r <- [1 .. 6],
-      c <- [1 .. 6],
+    | r <- [0 .. 5],
+      c <- [0 .. 5],
       q <- [One, Two, Three, Four],
       d <- ["l", "r"]
   ]

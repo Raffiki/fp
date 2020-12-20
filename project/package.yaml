@@ -30,6 +30,7 @@ dependencies:
 - random
 - either
 - extra
+- gloss
 
 library:
   source-dirs: src
@@ -40,6 +41,7 @@ executables:
     source-dirs:         app
     ghc-options:
     - -threaded
+    - -eventlog
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
