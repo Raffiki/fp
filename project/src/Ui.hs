@@ -13,7 +13,7 @@ type Coordinates = (Float, Float)
 data PartialCommand = PartialCommand (Maybe (Int, Int)) (Maybe QuadrantId) (Maybe Direction)
 
 data World = World
-  { _board :: Board,
+  { _board :: Maybe Board,
     _message :: Maybe Message,
     _command :: Either PartialCommand Command
   }
@@ -24,7 +24,7 @@ initialCommand :: PartialCommand
 initialCommand = PartialCommand Nothing Nothing Nothing
 
 emptyWorld :: Player -> World
-emptyWorld p = World (initialBoard p) Nothing $ Left initialCommand
+emptyWorld p = World (Just (initialBoard p)) Nothing $ Left initialCommand
 
 resize :: Size -> Path -> Path
 resize k = fmap (\(x, y) -> (x * k, y * k))
@@ -45,9 +45,10 @@ drawText :: Size -> Message -> Picture
 drawText k m = Color black $ translate (2 * k) (- k) $ scale 0.1 0.1 $ text m
 
 drawBoard :: Size -> World -> Picture
-drawBoard k (World b m _) = Pictures $ grid : message ++ bs ++ ws
+drawBoard k (World Nothing (Just m) _) = trace (show m) Pictures [drawText k m]
+drawBoard k (World (Just b) m _) = Pictures $ grid : message ++ bs ++ ws
   where
-    message = trace (show m) maybeToList $ fmap (drawText k) m
+    message = maybeToList $ fmap (drawText k) m
     bs = drawCircle k black . snd <$> (\(p, c) -> p == Black) `filter` getPlayerCoordinates b
     ws = drawCircle k white . snd <$> (\(p, c) -> p == White) `filter` getPlayerCoordinates b
 
@@ -92,25 +93,29 @@ getColumnIndexFromClick k f' =
         <|> 5 <$ guard (1 < f && f < 2)
 
 handleKeys :: Size -> Event -> World -> World
-handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World b m command@(Left (PartialCommand Nothing _ _))) =
+handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World (Just b) m command@(Left (PartialCommand Nothing _ _))) =
   fromMaybe w $ do
     c <- getColumnIndexFromClick k x'
     r <- getRowIndexFromClick k y'
-    return $ case applyCommand b (Command r c Nothing) of 
-      Left e -> World b (Just "click on a quadrant \nto rotate") (Left (PartialCommand (Just (r, c)) Nothing Nothing))
-      Right b -> World b (Just "click on a quadrant \nto rotate") (Left (PartialCommand (Just (r, c)) Nothing Nothing))
-handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World b _ (Left (PartialCommand (Just pos) Nothing _))) =
+    return $ case step b (Command r c Nothing) of
+      (_, Just b) -> World (Just b) (Just "click on a quadrant \nto rotate") (Left (PartialCommand (Just (r, c)) Nothing Nothing))
+      (m, Nothing) -> World Nothing (Just m) (Left (PartialCommand Nothing Nothing Nothing))
+handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World (Just b) _ (Left (PartialCommand (Just pos) Nothing _))) =
   fromMaybe w $ do
     c <- getColumnIndexFromClick k x'
     r <- getRowIndexFromClick k y'
-    return $ trace (show (getQuadrantId (r, c))) (World b (Just "click 'l' or 'r' key to \nrotate left/right") (Left (PartialCommand (Just pos) (Just (getQuadrantId (r, c))) Nothing)))
-handleKeys k (EventKey (Char 'l') Up _ _) w@(World b _ (Left (PartialCommand (Just (r, c)) (Just qId) Nothing))) =
-  case applyCommand b (Command r c (Just (qId, "l"))) of
-    Left message -> w
-    Right b -> World b (Just "click on a cell") $ Left initialCommand
+    return $ trace (show (getQuadrantId (r, c))) (World (Just b) (Just "click 'l' or 'r' key to \nrotate left/right") (Left (PartialCommand (Just pos) (Just (getQuadrantId (r, c))) Nothing)))
+handleKeys k (EventKey (Char 'l') Up _ _) w@(World (Just b) _ (Left (PartialCommand (Just (r, c)) (Just qId) Nothing))) =
+  case step b (Command r c (Just (qId, "l"))) of
+    (m, Just b) -> World (Just b) (Just (m ++ " click on a cell")) $ Left initialCommand
+    (m, Nothing) -> World Nothing (Just m) $ Left initialCommand
 handleKeys k (EventKey (Char 'r') Up _ _) w = trace (show "right") w
 handleKeys k _ w = w
 
+handleStep :: Board -> Command -> World
+handleStep b command@(Command r c _) = case step b command of
+  (_, Just b) -> World (Just b) (Just "click on a quadrant \nto rotate") (Left (PartialCommand (Just (r, c)) Nothing Nothing))
+  (m, Nothing) -> World Nothing (Just m) (Left (PartialCommand Nothing Nothing Nothing))
 
 step :: Board -> Command -> (Message, Maybe Board)
 step b c = case applyCommand b c of
@@ -120,7 +125,7 @@ step b c = case applyCommand b c of
 verifyDone :: Command -> Board -> Board -> (Message, Maybe Board)
 verifyDone (Command _ _ Nothing) oldBoard newBoard =
   if _player oldBoard `elem` getWinners newBoard
-    then ("You won", Nothing)
+    then ("Player " ++ show (_player oldBoard) ++ " won", Nothing)
     else ("You can only omit quadrant rotation when *you* win the game", Just oldBoard)
 verifyDone _ _ newBoard = case getWinners newBoard of
   [_, _] -> ("You both won", Nothing)
