@@ -28,7 +28,7 @@ minimax White ((b, c) :+ rs) =
    in (n, c : cs)
 
 nextAICommand :: Player -> Board -> (Int, [Command])
-nextAICommand aiPlayer b = minimax aiPlayer $ buildForest 4 ((b, dummyCommand), False)
+nextAICommand aiPlayer b = minimax aiPlayer $ buildForest 2 ((b, dummyCommand), False)
   where
     dummyCommand = Command 1 1 Nothing
 
