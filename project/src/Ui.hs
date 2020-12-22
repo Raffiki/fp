@@ -38,7 +38,7 @@ getPlayerCoordinates :: Board -> [(Player, Coordinates)]
 getPlayerCoordinates b = toCoordinates <$> getPositions b
   where
     toCoordinates :: Position -> (Player, Coordinates)
-    toCoordinates (player, row, col) = (player, ((fromInteger (toInteger row) - 2.5) * (-1), fromInteger (toInteger col) -2))
+    toCoordinates (player, row, col) = (player, ((fromInteger (toInteger col) - 1.5), (fromInteger (toInteger row) -1.5) * (-1)))
 
 drawBoard :: Size -> World -> Picture
 drawBoard k (World b _) = Pictures $ grid : bs ++ ws
