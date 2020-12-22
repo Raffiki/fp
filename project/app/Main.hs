@@ -3,10 +3,9 @@ module Main where
 import Data.List (elemIndex)
 import Data.Maybe (fromMaybe)
 import Exploration
-import Graphics.Gloss
-import Graphics.Gloss.Interface.Pure.Game
 import Lib
 import Text.Regex.Posix ((=~))
+import Ui
 
 parse :: String -> Maybe Command
 parse args = p (args =~ "^([a-f])([1-6])(,(I|II|III|IV)(r|l))?$" :: (String, String, String, [String]))
@@ -25,26 +24,28 @@ main :: IO ()
 main =
   do
     startingPlayer <- randomPlayer
-    loop $ Just $ initialBoard startingPlayer
-  where
-    loop Nothing = return ()
-    loop (Just s) = do
-      putStrLn $ prompt s
-      input <- getLine
-      let aiPlayer = Black
-      let (message, newState) = case parse input of
-            Nothing -> ("Cannot parse input. try again", Just s)
-            Just c -> step s c
-      putStrLn message
-      case fmap (\b -> (_player b, b)) newState of
-        Just (p, board) -> putStrLn message
-          where
-            message =
-              if p == aiPlayer
-                then show $ nextAICommand aiPlayer board
-                else "human is playing"
-        _ -> putStrLn "no board. Ending game"
-      loop newState
+    runUI startingPlayer
+
+--   loop $ Just $ initialBoard startingPlayer
+-- where
+--   loop Nothing = return ()
+--   loop (Just s) = do
+--     putStrLn $ prompt s
+--     input <- getLine
+--     let aiPlayer = Black
+--     let (message, newState) = case parse input of
+--           Nothing -> ("Cannot parse input. try again", Just s)
+--           Just c -> step s c
+--     putStrLn message
+--     case fmap (\b -> (_player b, b)) newState of
+--       Just (p, board) -> putStrLn message
+--         where
+--           message =
+--             if p == aiPlayer
+--               then show $ nextAICommand aiPlayer board
+--               else "human is playing"
+--       _ -> putStrLn "no board. Ending game"
+--     loop newState
 
 step :: Board -> Command -> (Message, Maybe Board)
 step b c = case applyCommand b c of

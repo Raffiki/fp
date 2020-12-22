@@ -3,56 +3,48 @@ module Ui (runUI) where
 import Control.Applicative
 import Control.Monad
 import Data.Maybe
+import Debug.Trace
 import Graphics.Gloss
 import Graphics.Gloss.Interface.Pure.Game
+import Lib
 
 type Coordinates = (Int, Int)
 
-data Player = Nought | Cross
+data PartialCommand = PartialCommand (Maybe (Int, Int)) (Maybe QuadrantId) (Maybe Direction)
 
-data Board = Board
-  { noughts :: [Coordinates],
-    crosses :: [Coordinates],
-    player :: Player
+data World = World
+  { _board :: Board,
+    _command :: Either PartialCommand Command
   }
 
-emptyBoard :: Board
-emptyBoard = Board [] [] Nought
-
-pushToken :: Coordinates -> Board -> Board
-pushToken c b = case player b of
-  Nought -> b {noughts = c : noughts b, player = Cross}
-  Cross -> b {crosses = c : crosses b, player = Nought}
-
 type Size = Float
+
+initialCommand :: PartialCommand
+initialCommand = PartialCommand Nothing Nothing Nothing
+
+emptyWorld :: Player -> World
+emptyWorld p = World (initialBoard p) $ Left initialCommand
 
 resize :: Size -> Path -> Path
 resize k = fmap (\(x, y) -> (x * k, y * k))
 
-drawNought :: Size -> Coordinates -> Picture
-drawNought k (x, y) =
+drawCircle :: Size -> Color -> Coordinates -> Picture
+drawCircle k c (x, y) =
   let x' = k * fromIntegral x
       y' = k * fromIntegral y
-   in color green $ translate x' y' $ thickCircle (0.1 * k) (0.3 * k)
+   in color c $ translate x' y' $ thickCircle (0.1 * k) (0.3 * k)
 
-drawCross :: Size -> Coordinates -> Picture
-drawCross k (x, y) =
-  let x' = k * fromIntegral x
-      y' = k * fromIntegral y
-   in color red $
-        translate x' y' $
-          Pictures $
-            fmap
-              (polygon . resize k)
-              [ [(-0.35, -0.25), (-0.25, -0.35), (0.35, 0.25), (0.25, 0.35)],
-                [(0.35, -0.25), (0.25, -0.35), (-0.35, 0.25), (-0.25, 0.35)]
-              ]
-
-drawBoard :: Size -> Board -> Picture
-drawBoard k b = Pictures $ grid : ns ++ cs
+getPlayerCoordinates :: Board -> [(Player, Coordinates)]
+getPlayerCoordinates b = toCoordinates <$> getPositions b
   where
-    ns = fmap (drawNought k) $ noughts b
-    cs = fmap (drawCross k) $ crosses b
+    toCoordinates :: Position -> (Player, Coordinates)
+    toCoordinates (player, row, col) = (player, ((row - 2) * (-1), col -2))
+
+drawBoard :: Size -> World -> Picture
+drawBoard k (World b _) = Pictures $ grid : bs ++ ws
+  where
+    bs = drawCircle k black . snd <$> (\(p, c) -> p == Black) `filter` getPlayerCoordinates b
+    ws = drawCircle k white . snd <$> (\(p, c) -> p == White) `filter` getPlayerCoordinates b
 
     grid :: Picture
     grid =
@@ -60,29 +52,50 @@ drawBoard k b = Pictures $ grid : ns ++ cs
         Pictures $
           fmap
             (line . resize k)
-            [ [(-1.5, -0.5), (1.5, -0.5)],
-              [(-1.5, 0.5), (1.5, 0.5)],
-              [(-0.5, -1.5), (-0.5, 1.5)],
-              [(0.5, -1.5), (0.5, 1.5)]
+            [ [(-3, -3), (-3, 3)],
+              [(-2, -3), (-2, 3)],
+              [(-1, -3), (-1, 3)],
+              [(0, -3), (0, 3)],
+              [(1, -3), (1, 3)],
+              [(2, -3), (2, 3)],
+              [(-4, 2), (2, 2)],
+              [(-4, 1), (2, 1)],
+              [(-4, 0), (2, 0)],
+              [(-4, -1), (2, -1)],
+              [(-4, -2), (2, -2)],
+              [(-4, -3), (2, -3)]
             ]
 
-checkCoordinate :: Size -> Float -> Maybe Int
-checkCoordinate k f' =
+getRowIndexFromClick :: Size -> Float -> Maybe Int
+getRowIndexFromClick k f' =
   let f = f' / k
-   in (-1) <$ guard (-1.5 < f && f < -0.5)
-        <|> 0 <$ guard (-0.5 < f && f < 0.5)
-        <|> 1 <$ guard (0.5 < f && f < 1.5)
+   in 5 <$ guard (-3 < f && f < -2)
+        <|> 4 <$ guard (-2 < f && f < -1)
+        <|> 3 <$ guard (-1 < f && f < 0)
+        <|> 2 <$ guard (0 < f && f < 1)
+        <|> 1 <$ guard (1 < f && f < 2)
+        <|> 0 <$ guard (2 < f && f < 3)
 
-handleKeys :: Size -> Event -> Board -> Board
+getColumnIndexFromClick :: Size -> Float -> Maybe Int
+getColumnIndexFromClick k f' =
+  let f = f' / k
+   in 0 <$ guard (-4 < f && f < -3)
+        <|> 1 <$ guard (-3 < f && f < -2)
+        <|> 2 <$ guard (-2 < f && f < -1)
+        <|> 3 <$ guard (-1 < f && f < 0)
+        <|> 4 <$ guard (0 < f && f < 1)
+        <|> 5 <$ guard (1 < f && f < 2)
+
+handleKeys :: Size -> Event -> World -> World
 handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) b =
   fromMaybe b $ do
-    x <- checkCoordinate k x'
-    y <- checkCoordinate k y'
-    return $ pushToken (x, y) b
-handleKeys k _ b = b
+    c <- getColumnIndexFromClick k x'
+    r <- getRowIndexFromClick k y'
+    return $ trace (show (r, c)) b
+handleKeys k _ w = w
 
-runUI :: IO ()
-runUI =
-  let window = InWindow "Pentago" (300, 300) (10, 10)
+runUI :: Player -> IO ()
+runUI p =
+  let window = InWindow "Pentago" (800, 600) (10, 10)
       size = 100.0
-   in play window yellow 1 emptyBoard (drawBoard size) (handleKeys size) (flip const)
+   in play window yellow 1 (emptyWorld p) (drawBoard size) (handleKeys size) (flip const)

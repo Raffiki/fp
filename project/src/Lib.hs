@@ -4,7 +4,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Lib
-  ( prompt,
+  ( Direction (..),
+    prompt,
     initialBoard,
     randomPlayer,
     Player (..),
@@ -22,17 +23,24 @@ module Lib
     applyCommand,
     QuadrantId (..),
     Message,
+    getPositions,
+    Position (..),
   )
 where
 
 import Control.Lens (Lens', makeLenses, over, set, view)
 import Control.Lens.TH ()
 import Data.List.Extra
+import Data.Maybe
 import qualified Data.Set as Set
 import GHC.Generics
 import System.Random (Random (random, randomR), newStdGen)
 
 type Message = String
+
+type Position = (Player, Int, Int)
+
+data Direction = R | L
 
 data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (QuadrantId, String)} deriving (Eq, Ord, Show)
 
@@ -157,8 +165,8 @@ mkInitialQuadrant :: QuadrantId -> Quadrant
 mkInitialQuadrant number =
   Quadrant
     { _quadrantId = number,
-      _row1 = Row E E E,
-      _row2 = Row E E E,
+      _row1 = Row B E E,
+      _row2 = Row E E W,
       _row3 = Row E E E
     }
 
@@ -215,6 +223,19 @@ applyCommand b c = (nextRound . applyRotation c) . setQuadrant b <$> updateQuadr
       Black -> B
       White -> W
 
+getPositions :: Board -> [Position]
+getPositions b = toPosition `mapMaybe` concat (getRowPositions <$> [1 .. 6])
+  where
+    toPosition :: (Cell, Int, Int) -> Maybe Position
+    toPosition (B, r, c) = Just (Black, r, c)
+    toPosition (W, r, c) = Just (White, r, c)
+    toPosition _ = Nothing
+
+    getRowPositions :: Int -> [(Cell, Int, Int)]
+    getRowPositions r = do
+      (p, c) <- enumerate' (getRow r b)
+      return (c, r, p)
+
 prompt :: Board -> Message
 prompt (Board _ q1 q2 q3 q4) =
   "    1  2  3  4  5  6" ++ "\n a "
@@ -249,3 +270,6 @@ fiveInARow [B, B, B, B, B, _] = Just Black
 fiveInARow [_, W, W, W, W, W] = Just White
 fiveInARow [W, W, W, W, W, _] = Just White
 fiveInARow _ = Nothing
+
+enumerate' :: [b] -> [(Int, b)]
+enumerate' = zip [0 ..]

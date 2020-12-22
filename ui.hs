@@ -1,8 +1,14 @@
 import Control.Applicative
 import Control.Monad
 import Data.Maybe
+import Debug.Trace
 import Graphics.Gloss
 import Graphics.Gloss.Interface.Pure.Game
+  ( Event (EventKey),
+    Key (MouseButton),
+    KeyState (Down),
+    MouseButton (LeftButton),
+  )
 
 type Coordinates = (Int, Int)
 
@@ -76,7 +82,7 @@ handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) b =
   fromMaybe b $ do
     x <- checkCoordinate k x'
     y <- checkCoordinate k y'
-    return $ pushToken (x, y) b
+    return $ trace (show (x, y)) pushToken (x, y) b
 handleKeys k _ b = b
 
 main :: IO ()
