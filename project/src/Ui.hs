@@ -14,6 +14,7 @@ data PartialCommand = PartialCommand (Maybe (Int, Int)) (Maybe QuadrantId) (Mayb
 
 data World = World
   { _board :: Board,
+    _message :: Maybe Message,
     _command :: Either PartialCommand Command
   }
 
@@ -23,7 +24,7 @@ initialCommand :: PartialCommand
 initialCommand = PartialCommand Nothing Nothing Nothing
 
 emptyWorld :: Player -> World
-emptyWorld p = World (initialBoard p) $ Left initialCommand
+emptyWorld p = World (initialBoard p) Nothing $ Left initialCommand
 
 resize :: Size -> Path -> Path
 resize k = fmap (\(x, y) -> (x * k, y * k))
@@ -37,11 +38,11 @@ drawCircle k c (x, y) =
 getPlayerCoordinates :: Board -> [(Player, Coordinates)]
 getPlayerCoordinates b = toCoordinates <$> getPositions b
   where
-    toCoordinates :: Position -> (Player, Coordinates)
-    toCoordinates (player, row, col) = (player, ((fromInteger (toInteger row) - 2.5) * (-1), fromInteger (toInteger col) -2))
+    toCoordinates :: (Player, Position) -> (Player, Coordinates)
+    toCoordinates (player, (row, col)) = (player, (fromInteger (toInteger col) - 3.5, (fromInteger (toInteger row) -3.5) * (-1)))
 
 drawBoard :: Size -> World -> Picture
-drawBoard k (World b _) = Pictures $ grid : bs ++ ws
+drawBoard k (World b m _) = Pictures $ grid : bs ++ ws
   where
     bs = drawCircle k black . snd <$> (\(p, c) -> p == Black) `filter` getPlayerCoordinates b
     ws = drawCircle k white . snd <$> (\(p, c) -> p == White) `filter` getPlayerCoordinates b
@@ -87,11 +88,21 @@ getColumnIndexFromClick k f' =
         <|> 5 <$ guard (1 < f && f < 2)
 
 handleKeys :: Size -> Event -> World -> World
-handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) b =
-  fromMaybe b $ do
+handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World b _ (Left (PartialCommand Nothing _ _))) =
+  fromMaybe w $ do
     c <- getColumnIndexFromClick k x'
     r <- getRowIndexFromClick k y'
-    return $ trace (show (r, c)) b
+    return $ trace (show (r, c)) (World b (Just "click on a quadrant to rotate") (Left (PartialCommand (Just (r, c)) Nothing Nothing)))
+handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World b _ (Left (PartialCommand (Just pos) Nothing _))) =
+  fromMaybe w $ do
+    c <- getColumnIndexFromClick k x'
+    r <- getRowIndexFromClick k y'
+    return $ trace (show (getQuadrantId (r, c))) (World b (Just "click 'l' or 'r' key to rotate left/right") (Left (PartialCommand (Just pos) (Just (getQuadrantId (r, c))) Nothing)))
+handleKeys k (EventKey (Char 'l') Up _ _) w@(World b _ (Left (PartialCommand (Just (r, c)) (Just qId) Nothing))) =
+  case applyCommand b (Command r c (Just (qId, "l"))) of
+    Left message -> w
+    Right b -> World b (Just "click on a cell") $ Left initialCommand
+handleKeys k (EventKey (Char 'r') Up _ _) w = trace (show "right") w
 handleKeys k _ w = w
 
 runUI :: Player -> IO ()

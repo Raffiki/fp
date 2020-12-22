@@ -25,6 +25,7 @@ module Lib
     Message,
     getPositions,
     Position (..),
+    getQuadrantId,
   )
 where
 
@@ -38,7 +39,7 @@ import System.Random (Random (random, randomR), newStdGen)
 
 type Message = String
 
-type Position = (Player, Int, Int)
+type Position = (Int, Int)
 
 data Direction = R | L
 
@@ -80,6 +81,7 @@ data Quadrant = Quadrant
     _row3 :: Row
   }
 
+makeLenses ''Command
 makeLenses ''Quadrant
 makeLenses ''Row
 makeLenses ''Board
@@ -193,8 +195,8 @@ getWinners b =
 hasWinner :: Board -> Bool
 hasWinner b = notNull $ getWinners b
 
-getQuadrantId :: Command -> QuadrantId
-getQuadrantId (Command r c _)
+getQuadrantId :: Position -> QuadrantId
+getQuadrantId (r, c)
   | (r < 3) && c < 3 = One
   | r < 3 = Two
   | c < 3 = Three
@@ -215,7 +217,7 @@ applyRotation (Command _ _ (Just (quadrantId, "r"))) s = setQuadrant s $ rotateR
 applyCommand :: Board -> Command -> Either Message Board
 applyCommand b c = (nextRound . applyRotation c) . setQuadrant b <$> updateQuadrant quadrant row col cell
   where
-    quadrantId = getQuadrantId c
+    quadrantId = getQuadrantId (view rowIdx c, view colIdx c)
     quadrant = getQuadrant b quadrantId
     row = (_rowIdx c `mod` 3) + 1
     col = (_colIdx c `mod` 3) + 1
@@ -223,12 +225,12 @@ applyCommand b c = (nextRound . applyRotation c) . setQuadrant b <$> updateQuadr
       Black -> B
       White -> W
 
-getPositions :: Board -> [Position]
+getPositions :: Board -> [(Player, Position)]
 getPositions b = toPosition `mapMaybe` concat (getRowPositions <$> [1 .. 6])
   where
-    toPosition :: (Cell, Int, Int) -> Maybe Position
-    toPosition (B, r, c) = Just (Black, r, c)
-    toPosition (W, r, c) = Just (White, r, c)
+    toPosition :: (Cell, Int, Int) -> Maybe (Player, Position)
+    toPosition (B, r, c) = Just (Black, (r, c))
+    toPosition (W, r, c) = Just (White, (r, c))
     toPosition _ = Nothing
 
     getRowPositions :: Int -> [(Cell, Int, Int)]
