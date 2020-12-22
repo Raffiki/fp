@@ -8,7 +8,7 @@ import Graphics.Gloss
 import Graphics.Gloss.Interface.Pure.Game
 import Lib
 
-type Coordinates = (Int, Int)
+type Coordinates = (Float, Float)
 
 data PartialCommand = PartialCommand (Maybe (Int, Int)) (Maybe QuadrantId) (Maybe Direction)
 
@@ -30,15 +30,15 @@ resize k = fmap (\(x, y) -> (x * k, y * k))
 
 drawCircle :: Size -> Color -> Coordinates -> Picture
 drawCircle k c (x, y) =
-  let x' = k * fromIntegral x
-      y' = k * fromIntegral y
+  let x' = k * x
+      y' = k * y
    in color c $ translate x' y' $ thickCircle (0.1 * k) (0.3 * k)
 
 getPlayerCoordinates :: Board -> [(Player, Coordinates)]
 getPlayerCoordinates b = toCoordinates <$> getPositions b
   where
     toCoordinates :: Position -> (Player, Coordinates)
-    toCoordinates (player, row, col) = (player, ((row - 2) * (-1), col -2))
+    toCoordinates (player, row, col) = (player, ((fromInteger (toInteger row) - 2.5) * (-1), fromInteger (toInteger col) -2))
 
 drawBoard :: Size -> World -> Picture
 drawBoard k (World b _) = Pictures $ grid : bs ++ ws
