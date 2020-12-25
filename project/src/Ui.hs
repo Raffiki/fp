@@ -10,6 +10,7 @@ import Control.Monad
 import Data.Maybe
 import Debug.Trace
 import Graphics.Gloss
+import Graphics.Gloss.Interface.IO.Game
 import Graphics.Gloss.Interface.Pure.Game
 import Lib
 
@@ -106,6 +107,9 @@ getColumnIndexFromClick k f' =
         <|> 4 <$ guard (0 < f && f < 1)
         <|> 5 <$ guard (1 < f && f < 2)
 
+handleKeysIO :: Size -> Event -> World -> IO World
+handleKeysIO s e = pure <$> handleKeys s e
+
 handleKeys :: Size -> Event -> World -> World
 handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World (Just b) _ _ m (PartialCommand Nothing _ _)) =
   fromMaybe w $ do
@@ -113,7 +117,7 @@ handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World (Just 
     r <- getRowIndexFromClick k y'
     return $ case step b (Command r c Nothing) of
       (_, Just b) ->
-        set (command . position) Nothing $
+        set (command . position) (Just (r, c)) $
           set message (Just "click on a quadrant to rotate") $
             set board (Just b) w
       (m, Nothing) ->
@@ -156,11 +160,11 @@ verifyDone _ _ newBoard = case getWinners newBoard of
   [winner] -> (show winner ++ " won", Nothing)
   _ -> ("", Just newBoard)
 
-stepWorld :: Float -> World -> World
-stepWorld f = trace (show f)
+stepWorld :: Float -> World -> IO World
+stepWorld f = pure <$> trace (show f)
 
 runUI :: Player -> Player -> IO ()
 runUI p aiPlayer =
   let window = InWindow "Pentago" (800, 600) (10, 10)
       size = 100.0
-   in play window yellow 1 (emptyWorld p aiPlayer) (drawBoard size) (handleKeys size) stepWorld
+   in playIO window yellow 1 (emptyWorld p aiPlayer) (pure <$> drawBoard size) (handleKeysIO size) stepWorld

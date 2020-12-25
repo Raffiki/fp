@@ -24,7 +24,7 @@ main :: IO ()
 main =
   do
     startingPlayer <- randomPlayer
-    runUI startingPlayer
+    runUI startingPlayer (nextPlayer startingPlayer)
 
 --   loop $ Just $ initialBoard startingPlayer
 -- where
