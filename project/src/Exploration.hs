@@ -4,6 +4,7 @@ import Control.Parallel.Strategies
 import Data.Either
 import Data.Either.Combinators
 import qualified Data.List.NonEmpty as NonEmpty
+import Debug.Trace
 import Lib
 
 data Forest a = a :+ [Forest a]
@@ -27,10 +28,15 @@ minimax White ((b, c) :+ rs) =
   let (n, cs) = minimum (map (minimax Black) rs `using` parList rseq)
    in (n, c : cs)
 
-nextAICommand :: Player -> Board -> (Int, [Command])
-nextAICommand aiPlayer b = minimax aiPlayer $ buildForest 2 ((b, dummyCommand), False)
+nextAICommands :: Player -> Board -> (Int, [Command])
+nextAICommands aiPlayer b = minimax aiPlayer $ buildForest 2 ((b, dummyCommand), False)
   where
     dummyCommand = Command 1 1 Nothing
+
+nextAICommand :: Player -> Board -> Maybe Command
+nextAICommand p b = case nextAICommands p b of
+  (_, _ : second : _) -> trace (show second) Just second
+  _ -> Nothing
 
 fitness :: Board -> Int
 fitness b =

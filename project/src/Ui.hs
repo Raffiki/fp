@@ -4,11 +4,13 @@
 module Ui (runUI) where
 
 import Control.Applicative
+import Control.Concurrent
 import Control.Lens (Lens', makeLenses, over, set, view)
 import Control.Lens.TH ()
 import Control.Monad
 import Data.Maybe
 import Debug.Trace
+import Exploration
 import Graphics.Gloss
 import Graphics.Gloss.Interface.IO.Game
 import Graphics.Gloss.Interface.Pure.Game
@@ -25,7 +27,7 @@ data PartialCommand = PartialCommand
 data World = World
   { _board :: Maybe Board,
     _aiPlayer :: Player,
-    _busy :: Bool,
+    _isBusy :: Maybe (MVar Bool),
     _message :: Maybe Message,
     _command :: PartialCommand
   }
@@ -39,7 +41,7 @@ initialCommand :: PartialCommand
 initialCommand = PartialCommand Nothing Nothing Nothing
 
 emptyWorld :: Player -> Player -> World
-emptyWorld p aiPlayer = World (Just (initialBoard p)) aiPlayer False Nothing initialCommand
+emptyWorld p aiPlayer = World (Just (initialBoard p)) aiPlayer Nothing Nothing initialCommand
 
 resize :: Size -> Path -> Path
 resize k = fmap (\(x, y) -> (x * k, y * k))
@@ -147,8 +149,8 @@ handleKeys k _ w = w
 
 step :: Board -> Command -> (Message, Maybe Board)
 step b c = case applyCommand b c of
-  Left message -> (message, Just b)
-  Right newBoard -> verifyDone c b newBoard
+  Left message -> trace (show message) (message, Just b)
+  Right newBoard -> trace (show "verify") verifyDone c b newBoard
 
 verifyDone :: Command -> Board -> Board -> (Message, Maybe Board)
 verifyDone (Command _ _ Nothing) oldBoard newBoard =
@@ -161,7 +163,28 @@ verifyDone _ _ newBoard = case getWinners newBoard of
   _ -> ("", Just newBoard)
 
 stepWorld :: Float -> World -> IO World
-stepWorld f = pure <$> trace (show f)
+stepWorld _ w@(World _ _ Nothing _ _) = do
+  busy <- newMVar False
+  return $ set isBusy (Just busy) w
+stepWorld f w@(World (Just b@(Board player _ _ _ _)) aiPlayer (Just busy) _ _) =
+  if trace (show "wrong player") player /= aiPlayer
+    then return w
+    else do
+      isBusy <- takeMVar busy
+      putMVar busy True
+      if isBusy
+        then trace (show "thinking") return w
+        else case nextAICommand aiPlayer b of
+          Nothing -> trace (show "no command") return w
+          Just c ->
+            takeMVar busy >> putMVar busy False
+              >> return
+                ( set command initialCommand $
+                    set message (Just m) $
+                      set board boar w
+                )
+            where
+              (m, boar) = trace (show "stepping") step b c
 
 runUI :: Player -> Player -> IO ()
 runUI p aiPlayer =
