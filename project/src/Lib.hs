@@ -4,7 +4,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Lib
-  ( Direction (..),
+  ( Rotation (..),
+    Move (..),
     prompt,
     initialBoard,
     randomPlayer,
@@ -24,7 +25,7 @@ module Lib
     QuadrantId (..),
     Message,
     getPositions,
-    Position (..),
+    Position,
     getQuadrantId,
   )
 where
@@ -41,7 +42,11 @@ type Message = String
 
 type Position = (Int, Int)
 
-data Direction = R | L
+data Rotation = R | L deriving (Eq, Ord, Show)
+
+data Move = Move {_position :: Position, _quadrant :: QuadrantId, _rotation :: Rotation} deriving (Eq, Ord, Show)
+
+newtype EndMove = EndMove Position deriving (Eq, Ord, Show)
 
 data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (QuadrantId, String)} deriving (Eq, Ord, Show)
 

@@ -21,7 +21,7 @@ type Coordinates = (Float, Float)
 data PartialCommand = PartialCommand
   { _position :: (Maybe (Int, Int)),
     _quadrantId :: (Maybe QuadrantId),
-    _direction :: (Maybe Direction)
+    _rotation :: (Maybe Rotation)
   }
 
 data World = World
@@ -31,6 +31,9 @@ data World = World
     _message :: Maybe Message,
     _command :: PartialCommand
   }
+
+data History s = History {current :: s, undos :: [s]}
+  deriving (Eq, Show, Read)
 
 type Size = Float
 
