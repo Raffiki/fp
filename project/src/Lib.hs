@@ -1,11 +1,15 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Lib
   ( Rotation (..),
     Move (..),
+    EndMove (..),
+    Sequence (..),
+    MoveSequence (..),
     prompt,
     initialBoard,
     randomPlayer,
@@ -25,7 +29,7 @@ module Lib
     QuadrantId (..),
     Message,
     getPositions,
-    Position,
+    Position (..),
     getQuadrantId,
   )
 where
@@ -40,13 +44,28 @@ import System.Random (Random (random, randomR), newStdGen)
 
 type Message = String
 
-type Position = (Int, Int)
+newtype Position = Position (Int, Int) deriving (Eq, Ord)
+
+instance Show Position where
+  show (Position (0, c)) = "a" ++ show (c + 1)
+  show (Position (1, c)) = "b" ++ show (c + 1)
+  show (Position (2, c)) = "c" ++ show (c + 1)
+  show (Position (3, c)) = "d" ++ show (c + 1)
+  show (Position (4, c)) = "e" ++ show (c + 1)
+  show (Position (5, c)) = "f" ++ show (c + 1)
 
 data Rotation = R | L deriving (Eq, Ord, Show)
 
-data Move = Move {_position :: Position, _quadrant :: QuadrantId, _rotation :: Rotation} deriving (Eq, Ord, Show)
+data Move = NormalMove {_position :: Position, _quadrant :: QuadrantId, _rotation :: Rotation} deriving (Eq, Ord)
 
-newtype EndMove = EndMove Position deriving (Eq, Ord, Show)
+instance Show Move where
+  show (NormalMove p q r) = show p ++ show q ++ show r
+
+type EndMove = Position
+
+data Sequence a z = a :> (Sequence a z) | End z | Empty deriving (Eq, Show)
+
+type MoveSequence = Sequence Move EndMove
 
 data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (QuadrantId, String)} deriving (Eq, Ord, Show)
 
@@ -59,7 +78,11 @@ instance Show Cell where
   show W = "w"
   show E = "."
 
-data Player = Black | White deriving (Eq, Ord, Show, Enum, Bounded)
+data Player = Black | White deriving (Eq, Ord, Enum, Bounded)
+
+instance Show Player where
+  show Black = "B"
+  show White = "W"
 
 instance Random Player where
   randomR (a, b) g =
@@ -67,12 +90,13 @@ instance Random Player where
       (x, g') -> (toEnum x, g')
   random g = randomR (minBound, maxBound) g
 
-randomPlayer :: IO Player
-randomPlayer = do
-  g <- newStdGen
-  return . fst $ random g
+data QuadrantId = One | Two | Three | Four deriving (Eq, Ord)
 
-data QuadrantId = One | Two | Three | Four deriving (Eq, Ord, Show)
+instance Show QuadrantId where
+  show One = "I"
+  show Two = "II"
+  show Three = "III"
+  show Four = "IV"
 
 data Row = Row {_cell1 :: Cell, _cell2 :: Cell, _cell3 :: Cell}
 
@@ -85,6 +109,11 @@ data Quadrant = Quadrant
     _row2 :: Row,
     _row3 :: Row
   }
+
+randomPlayer :: IO Player
+randomPlayer = do
+  g <- newStdGen
+  return . fst $ random g
 
 makeLenses ''Command
 makeLenses ''Quadrant
@@ -201,7 +230,7 @@ hasWinner :: Board -> Bool
 hasWinner b = notNull $ getWinners b
 
 getQuadrantId :: Position -> QuadrantId
-getQuadrantId (r, c)
+getQuadrantId (Position (r, c))
   | (r < 3) && c < 3 = One
   | r < 3 = Two
   | c < 3 = Three
@@ -222,7 +251,7 @@ applyRotation (Command _ _ (Just (quadrantId, "r"))) s = setQuadrant s $ rotateR
 applyCommand :: Board -> Command -> Either Message Board
 applyCommand b c = (nextRound . applyRotation c) . setQuadrant b <$> updateQuadrant quadrant row col cell
   where
-    quadrantId = getQuadrantId (view rowIdx c, view colIdx c)
+    quadrantId = getQuadrantId $ Position (view rowIdx c, view colIdx c)
     quadrant = getQuadrant b quadrantId
     row = (_rowIdx c `mod` 3) + 1
     col = (_colIdx c `mod` 3) + 1
@@ -234,8 +263,8 @@ getPositions :: Board -> [(Player, Position)]
 getPositions b = toPosition `mapMaybe` concat (getRowPositions <$> [1 .. 6])
   where
     toPosition :: (Cell, Int, Int) -> Maybe (Player, Position)
-    toPosition (B, r, c) = Just (Black, (r, c))
-    toPosition (W, r, c) = Just (White, (r, c))
+    toPosition (B, r, c) = Just (Black, Position (r, c))
+    toPosition (W, r, c) = Just (White, Position (r, c))
     toPosition _ = Nothing
 
     getRowPositions :: Int -> [(Cell, Int, Int)]

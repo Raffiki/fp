@@ -1,5 +1,6 @@
 module Parser where
 
+import Data.Either.Combinators
 import Lib
 import Text.ParserCombinators.Parsec
 
@@ -28,9 +29,9 @@ column =
 
 quadrantId :: GenParser Char st QuadrantId
 quadrantId =
-  try (string "VI" >> return One)
-    <|> try (string "III" >> return One)
-    <|> try (string "II" >> return One)
+  try (string "IV" >> return Four)
+    <|> try (string "III" >> return Three)
+    <|> try (string "II" >> return Two)
     <|> (string "I" >> return One)
 
 rotation :: GenParser Char st Rotation
@@ -44,36 +45,47 @@ whitespace = many (oneOf [' ', '\n'])
 header :: GenParser Char st (Player, Player)
 header = do
   humanPlayer <- colour
-  _ <- whitespace
+  whitespace
   _ <- char ';'
   whitespace
   startingPlayer <- colour
-  _ <- whitespace
+  whitespace
   _ <- char ';'
-  _ <- whitespace
+  whitespace
   return (humanPlayer, startingPlayer)
 
 --ROW COLUMN QUADRANT ROT
 move :: GenParser Char st Move
 move = do
   r <- row
-  _ <- whitespace
+  whitespace
   c <- column
-  _ <- whitespace
+  whitespace
   q <- quadrantId
-  _ <- whitespace
+  whitespace
   rot <- rotation
-  _ <- whitespace
-  return $ Move (r, c) q rot
+  whitespace
+  return $ NormalMove (Position (r, c)) q rot
 
-moves :: GenParser Char st [Move]
-moves = do
-  first <- move
-  next <- remainingMoves
-  return (first : next)
+endMove :: GenParser Char st MoveSequence
+endMove = do
+  r <- row
+  whitespace
+  c <- column
+  whitespace
+  eof
+  return $ End $ Position (r, c)
 
-remainingMoves :: GenParser Char st [Move]
-remainingMoves = next <|> return []
+moves :: GenParser Char st MoveSequence
+moves = try next <|> endMove
+  where
+    next = do
+      first <- move
+      next <- remainingMoves
+      return (first :> next)
+
+remainingMoves :: GenParser Char st MoveSequence
+remainingMoves = next <|> return Empty
   where
     next = do
       whitespace
@@ -81,14 +93,40 @@ remainingMoves = next <|> return []
       whitespace
       moves
 
-gameFile :: GenParser Char st (Player, Player, [Move])
+gameFile :: GenParser Char st (Player, Player, MoveSequence)
 gameFile = do
   (humanPlayer, startingPlayer) <- header
   ms <- moves
   eof
   return (humanPlayer, startingPlayer, ms)
 
-parseFile :: String -> Either ParseError (Player, Player, [Move])
+parseFile :: String -> Either ParseError (Player, Player, MoveSequence)
 parseFile = parse gameFile "(unknown)"
+
+--a :> (Sequence a z) | End z | Empty deriving (Eq, Show)
+printMoves :: MoveSequence -> String
+printMoves (a :> Empty) = show a
+printMoves (End p) = show p
+printMoves (a :> as) = show a ++ ",\n" ++ printMoves as
+
+printGame :: (Player, Player, MoveSequence) -> String
+printGame (humanPlayer, startingPlayer, moves) =
+  show humanPlayer ++ ";\n"
+    ++ show startingPlayer
+    ++ ";\n"
+    ++ printMoves moves
+
+writeToFile :: (Player, Player, MoveSequence) -> IO ()
+writeToFile (humanPlayer, startingPlayer, moves) = do
+  let outputStr =
+        show humanPlayer ++ ";\n"
+          ++ show startingPlayer
+          ++ ";\n"
+          ++ printMoves moves
+
+  writeFile "game.ptg" outputStr
+
+printToConsole :: String -> Either ParseError String
+printToConsole s = mapRight printGame $ parseFile s
 
 --parseFile "B; W; a1Ir"

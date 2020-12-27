@@ -59,7 +59,7 @@ getPlayerCoordinates :: Board -> [(Player, Coordinates)]
 getPlayerCoordinates b = toCoordinates <$> getPositions b
   where
     toCoordinates :: (Player, Position) -> (Player, Coordinates)
-    toCoordinates (player, (row, col)) = (player, (fromInteger (toInteger col) - 3.5, (fromInteger (toInteger row) -3.5) * (-1)))
+    toCoordinates (player, Position (row, col)) = (player, (fromInteger (toInteger col) - 3.5, (fromInteger (toInteger row) -3.5) * (-1)))
 
 drawText :: Size -> Message -> Picture
 drawText k m = Color black $ translate (2 * k) (- k) $ scale 0.1 0.1 $ text m
@@ -134,7 +134,7 @@ handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World (Just 
     c <- getColumnIndexFromClick k x'
     r <- getRowIndexFromClick k y'
     return $
-      set (command . quadrantId) (Just (getQuadrantId (r, c))) $
+      set (command . quadrantId) (Just (getQuadrantId (Position (r, c)))) $
         set message (Just "click 'l' or 'r' key to \nrotate left/right") $
           set board (Just b) w
 handleKeys k (EventKey (Char 'l') Up _ _) w@(World (Just b) _ _ _ (PartialCommand (Just (r, c)) (Just qId) Nothing)) =
