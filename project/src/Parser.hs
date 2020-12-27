@@ -1,10 +1,12 @@
 module Parser where
 
+import Control.Monad.Trans.Except
 import Data.Either.Combinators
+import Errors
+import Files
 import Lib
+import System.IO
 import Text.ParserCombinators.Parsec
-
--- file = colour ';' colour ';'
 
 colour :: GenParser Char st Player
 colour = (char 'B' >> return Black) <|> (char 'W' >> return White)
@@ -100,10 +102,11 @@ gameFile = do
   eof
   return (humanPlayer, startingPlayer, ms)
 
-parseFile :: String -> Either ParseError (Player, Player, MoveSequence)
-parseFile = parse gameFile "(unknown)"
+parseFile :: String -> Either AppError (Player, Player, MoveSequence)
+parseFile s = case parse gameFile "(unknown)" s of
+  Left err -> Left $ AppParseError $ show err
+  Right res -> Right res
 
---a :> (Sequence a z) | End z | Empty deriving (Eq, Show)
 printMoves :: MoveSequence -> String
 printMoves (a :> Empty) = show a
 printMoves (End p) = show p
@@ -117,16 +120,18 @@ printGame (humanPlayer, startingPlayer, moves) =
     ++ printMoves moves
 
 writeToFile :: (Player, Player, MoveSequence) -> IO ()
-writeToFile (humanPlayer, startingPlayer, moves) = do
-  let outputStr =
-        show humanPlayer ++ ";\n"
-          ++ show startingPlayer
-          ++ ";\n"
-          ++ printMoves moves
+writeToFile g = writeFile "game.ptg" $ printGame g
 
-  writeFile "game.ptg" outputStr
+readFromFile :: IO (Either AppError (Player, Player, MoveSequence))
+readFromFile = runExceptT $ do
+  content <- ExceptT $ readFile' "game.ptg" (MissingFileError "cannot find game.ptg file")
+  ExceptT $ return $ parseFile content
 
-printToConsole :: String -> Either ParseError String
+writeToFile2 :: String -> IO ()
+writeToFile2 s = case parseFile s of
+  Right g -> writeToFile g
+
+printToConsole :: String -> Either AppError String
 printToConsole s = mapRight printGame $ parseFile s
 
 --parseFile "B; W; a1Ir"

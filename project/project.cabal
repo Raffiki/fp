@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 967e12078e42a8d8cd64b23f2e2be750c95316e62fc4b4aeb12c2992bca33363
+-- hash: 00fcdeb049121a9328ccd6ee9394d9f6ad17555e7e5994ce95cf9de4cb62996b
 
 name:           project
 version:        0.1.0.0
@@ -27,7 +27,9 @@ source-repository head
 
 library
   exposed-modules:
+      Errors
       Exploration
+      Files
       Lib
       Parser
       Ui
@@ -48,6 +50,7 @@ library
     , parsec
     , random
     , regex-posix
+    , transformers
   default-language: Haskell2010
 
 executable project-exe
@@ -71,6 +74,7 @@ executable project-exe
     , project
     , random
     , regex-posix
+    , transformers
   default-language: Haskell2010
 
 test-suite project-test
@@ -95,4 +99,5 @@ test-suite project-test
     , project
     , random
     , regex-posix
+    , transformers
   default-language: Haskell2010
