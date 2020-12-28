@@ -1,12 +1,12 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Lib
   ( Rotation (..),
     Move (..),
+    NormalMove (..),
     EndMove (..),
     Sequence (..),
     MoveSequence (..),
@@ -23,9 +23,8 @@ module Lib
     getColumn,
     getDiagonalq1q4,
     getDiagonalq2q2,
-    Command (Command),
     allPossibleCommands,
-    applyCommand,
+    applyMove,
     QuadrantId (..),
     Message,
     getPositions,
@@ -56,18 +55,18 @@ instance Show Position where
 
 data Rotation = R | L deriving (Eq, Ord, Show)
 
-data Move = NormalMove {_position :: Position, _quadrant :: QuadrantId, _rotation :: Rotation} deriving (Eq, Ord)
+data NormalMove = NormalMove {_position :: Position, _quadrant :: QuadrantId, _rotation :: Rotation} deriving (Eq, Ord)
 
-instance Show Move where
+instance Show NormalMove where
   show (NormalMove p q r) = show p ++ show q ++ show r
 
 type EndMove = Position
 
 data Sequence a z = a :> (Sequence a z) | End z | Empty deriving (Eq, Show)
 
-type MoveSequence = Sequence Move EndMove
+type MoveSequence = Sequence NormalMove EndMove
 
-data Command = Command {_rowIdx :: Int, _colIdx :: Int, _rotate :: Maybe (QuadrantId, String)} deriving (Eq, Ord, Show)
+type Move = Either NormalMove EndMove
 
 data Board = Board {_player :: Player, _q1 :: Quadrant, _q2 :: Quadrant, _q3 :: Quadrant, _q4 :: Quadrant} deriving (Generic)
 
@@ -115,19 +114,26 @@ randomPlayer = do
   g <- newStdGen
   return . fst $ random g
 
-makeLenses ''Command
+makeLenses ''NormalMove
 makeLenses ''Quadrant
 makeLenses ''Row
 makeLenses ''Board
 
-allPossibleCommands :: [Command]
-allPossibleCommands =
-  [ Command r c (Just (q, d))
-    | r <- [0 .. 5],
-      c <- [0 .. 5],
-      q <- [One, Two, Three, Four],
-      d <- ["l", "r"]
-  ]
+allPossibleCommands :: [Move]
+allPossibleCommands = allNormalMoves ++ allEndMoves
+  where
+    allNormalMoves =
+      [ Left (NormalMove (Position (r, c)) q d)
+        | r <- [0 .. 5],
+          c <- [0 .. 5],
+          q <- [One, Two, Three, Four],
+          d <- [L, R]
+      ]
+    allEndMoves =
+      [ Right (Position (r, c))
+        | r <- [0 .. 5],
+          c <- [0 .. 5]
+      ]
 
 nextPlayer :: Player -> Player
 nextPlayer Black = White
@@ -243,18 +249,21 @@ getQuadrant b qId
   | qId == Three = _q3 b
   | qId == Four = _q4 b
 
-applyRotation :: Command -> Board -> Board
-applyRotation (Command _ _ Nothing) s = s
-applyRotation (Command _ _ (Just (quadrantId, "l"))) s = setQuadrant s $ rotateLeft $ getQuadrant s quadrantId
-applyRotation (Command _ _ (Just (quadrantId, "r"))) s = setQuadrant s $ rotateRight $ getQuadrant s quadrantId
+applyRotation :: Move -> Board -> Board
+applyRotation (Right (Position _)) s = s
+applyRotation (Left (NormalMove _ quadrantId L)) s = setQuadrant s $ rotateLeft $ getQuadrant s quadrantId
+applyRotation (Left (NormalMove _ quadrantId R)) s = setQuadrant s $ rotateRight $ getQuadrant s quadrantId
 
-applyCommand :: Board -> Command -> Either Message Board
-applyCommand b c = (nextRound . applyRotation c) . setQuadrant b <$> updateQuadrant quadrant row col cell
+applyMove :: Board -> Move -> Either Message Board
+applyMove b m = (nextRound . applyRotation m) . setQuadrant b <$> updateQuadrant quadrant row col cell
   where
-    quadrantId = getQuadrantId $ Position (view rowIdx c, view colIdx c)
+    pos@(Position (r, c)) = case m of
+      Left m -> view position m
+      Right e -> e
+    quadrantId = getQuadrantId pos
     quadrant = getQuadrant b quadrantId
-    row = (_rowIdx c `mod` 3) + 1
-    col = (_colIdx c `mod` 3) + 1
+    row = (r `mod` 3) + 1
+    col = (c `mod` 3) + 1
     cell = case _player b of
       Black -> B
       White -> W

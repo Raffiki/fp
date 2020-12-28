@@ -57,7 +57,7 @@ header = do
   return (humanPlayer, startingPlayer)
 
 --ROW COLUMN QUADRANT ROT
-move :: GenParser Char st Move
+move :: GenParser Char st NormalMove
 move = do
   r <- row
   whitespace

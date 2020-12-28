@@ -13,7 +13,6 @@ import Debug.Trace
 import Exploration
 import Graphics.Gloss
 import Graphics.Gloss.Interface.IO.Game
-import Graphics.Gloss.Interface.Pure.Game
 import Lib
 
 type Coordinates = (Float, Float)
@@ -120,7 +119,7 @@ handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World (Just 
   fromMaybe w $ do
     c <- getColumnIndexFromClick k x'
     r <- getRowIndexFromClick k y'
-    return $ case step b (Command r c Nothing) of
+    return $ case step b (Right (Position (r, c))) of
       (_, Just b) ->
         set (command . position) (Just (r, c)) $
           set message (Just "click on a quadrant to rotate") $
@@ -138,7 +137,7 @@ handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World (Just 
         set message (Just "click 'l' or 'r' key to \nrotate left/right") $
           set board (Just b) w
 handleKeys k (EventKey (Char 'l') Up _ _) w@(World (Just b) _ _ _ (PartialCommand (Just (r, c)) (Just qId) Nothing)) =
-  case step b (Command r c (Just (qId, "l"))) of
+  case step b (Left (NormalMove (Position (r, c)) qId L)) of
     (m, Just b) ->
       set command initialCommand $
         set message (Just m) $
@@ -150,13 +149,13 @@ handleKeys k (EventKey (Char 'l') Up _ _) w@(World (Just b) _ _ _ (PartialComman
 handleKeys k (EventKey (Char 'r') Up _ _) w = trace (show "right") w
 handleKeys k _ w = w
 
-step :: Board -> Command -> (Message, Maybe Board)
-step b c = case applyCommand b c of
+step :: Board -> Move -> (Message, Maybe Board)
+step b c = case applyMove b c of
   Left message -> trace (show message) (message, Just b)
   Right newBoard -> trace (show "verify") verifyDone c b newBoard
 
-verifyDone :: Command -> Board -> Board -> (Message, Maybe Board)
-verifyDone (Command _ _ Nothing) oldBoard newBoard =
+verifyDone :: Move -> Board -> Board -> (Message, Maybe Board)
+verifyDone (Right _) oldBoard newBoard =
   if _player oldBoard `elem` getWinners newBoard
     then ("Player " ++ show (_player oldBoard) ++ " won", Nothing)
     else ("You can only omit quadrant rotation when *you* win the game", Just oldBoard)

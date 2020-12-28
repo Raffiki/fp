@@ -9,17 +9,17 @@ import Lib
 
 data Forest a = a :+ [Forest a]
 
-buildForest :: Int -> ((Board, Command), Bool) -> Forest (Board, Command)
+buildForest :: Int -> ((Board, Move), Bool) -> Forest (Board, Move)
 buildForest 0 (b, _) = b :+ []
 buildForest n (b, True) = b :+ [buildForest (n - 1) (b, True)]
 buildForest n (b, False) = b :+ (buildForest (n - 1) <$> evalPar b allPossibleCommands)
   where
-    evalPar :: (Board, Command) -> [Command] -> [((Board, Command), Bool)]
+    evalPar :: (Board, Move) -> [Move] -> [((Board, Move), Bool)]
     evalPar (b, c) cs = rights (map result cs `using` parList rseq)
       where
-        result c = (\b -> ((b, c), hasWinner b)) `mapRight` applyCommand b c
+        result c = (\b -> ((b, c), hasWinner b)) `mapRight` applyMove b c
 
-minimax :: Player -> Forest (Board, Command) -> (Int, [Command])
+minimax :: Player -> Forest (Board, Move) -> (Int, [Move])
 minimax p ((b, c) :+ []) = (fitness b, [c])
 minimax Black ((b, c) :+ rs) =
   let (n, cs) = maximum (map (minimax White) rs `using` parList rseq)
@@ -28,12 +28,12 @@ minimax White ((b, c) :+ rs) =
   let (n, cs) = minimum (map (minimax Black) rs `using` parList rseq)
    in (n, c : cs)
 
-nextAICommands :: Player -> Board -> (Int, [Command])
+nextAICommands :: Player -> Board -> (Int, [Move])
 nextAICommands aiPlayer b = minimax aiPlayer $ buildForest 2 ((b, dummyCommand), False)
   where
-    dummyCommand = Command 1 1 Nothing
+    dummyCommand = Left $ NormalMove (Position (1, 1)) One L
 
-nextAICommand :: Player -> Board -> Maybe Command
+nextAICommand :: Player -> Board -> Maybe Move
 nextAICommand p b = case nextAICommands p b of
   (_, _ : second : _) -> trace (show second) Just second
   _ -> Nothing
