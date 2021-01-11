@@ -7,7 +7,7 @@ import Control.Applicative
 import Control.Concurrent
 import Control.Lens (Lens', makeLenses, over, set, view)
 import Control.Lens.TH ()
-import Control.Monad
+import Control.Monad.State
 import Data.Maybe
 import Debug.Trace
 import Exploration
@@ -24,18 +24,28 @@ data PartialCommand = PartialCommand
   }
 
 data World = World
-  { _board :: Maybe Board,
+  { _gameState :: GameState,
     _aiPlayer :: Player,
     _isBusy :: Maybe (MVar Bool),
-    _message :: Maybe Message,
     _command :: PartialCommand
   }
+
+type GameOver = Bool
 
 data History s = History {current :: s, undos :: [s]}
   deriving (Eq, Show, Read)
 
+blankHistory s = History {current = s, undos = []}
+
+data GameState = GameState
+  { _gameOver :: GameOver,
+    _history :: History (Board, Maybe Move),
+    _message :: Maybe Message
+  }
+
 type Size = Float
 
+makeLenses ''GameState
 makeLenses ''PartialCommand
 makeLenses ''World
 
@@ -43,7 +53,7 @@ initialCommand :: PartialCommand
 initialCommand = PartialCommand Nothing Nothing Nothing
 
 emptyWorld :: Player -> Player -> World
-emptyWorld p aiPlayer = World (Just (initialBoard p)) aiPlayer Nothing Nothing initialCommand
+emptyWorld p aiPlayer = World (GameState False (blankHistory (initialBoard p, Nothing)) Nothing) aiPlayer Nothing initialCommand
 
 resize :: Size -> Path -> Path
 resize k = fmap (\(x, y) -> (x * k, y * k))
@@ -63,13 +73,41 @@ getPlayerCoordinates b = toCoordinates <$> getPositions b
 drawText :: Size -> Message -> Picture
 drawText k m = Color black $ translate (2 * k) (- k) $ scale 0.1 0.1 $ text m
 
+topText :: Size -> Player -> Picture
+topText k Black =
+  Pictures
+    [ color black (translate (2 * k) (2.5 * k) $ scale 0.1 0.1 $ text "AI player"),
+      color white $ translate (2 * k) (2 * k) $ scale 0.1 0.1 $ text "Human"
+    ]
+topText k White =
+  Pictures
+    [ color white (translate (2 * k) (2.5 * k) $ scale 0.1 0.1 $ text "AI player"),
+      color black $ translate (2 * k) (2 * k) $ scale 0.1 0.1 $ text "Human"
+    ]
+
 drawBoard :: Size -> World -> Picture
-drawBoard k (World Nothing _ _ (Just m) _) = trace (show m) Pictures [drawText k m]
-drawBoard k (World (Just b) _ _ m _) = Pictures $ grid : message ++ bs ++ ws
+drawBoard k (World (GameState True _ (Just m)) aiPlayer _ _) = Pictures [toptext, drawText k m]
   where
+    toptext = topText k aiPlayer
+drawBoard k (World (GameState False (History (b, _) _) m) aiPlayer _ _) = Pictures $ load : grid : toptext : message ++ bs ++ ws
+  where
+    toptext = topText k aiPlayer
     message = maybeToList $ fmap (drawText k) m
     bs = drawCircle k black . snd <$> (\(p, c) -> p == Black) `filter` getPlayerCoordinates b
     ws = drawCircle k white . snd <$> (\(p, c) -> p == White) `filter` getPlayerCoordinates b
+
+    load :: Picture
+    load =
+      color black $
+        Pictures $
+          color black (translate (2.2 * k) (-2.7 * k) $ scale 0.1 0.1 $ text "LOAD") :
+          fmap
+            (line . resize k)
+            [ [(2.1, -2.9), (2.9, -2.9)],
+              [(2.1, -2.4), (2.9, -2.4)],
+              [(2.1, -2.9), (2.1, -2.4)],
+              [(2.9, -2.4), (2.9, -2.9)]
+            ]
 
     grid :: Picture
     grid =
@@ -111,85 +149,91 @@ getColumnIndexFromClick k f' =
         <|> 4 <$ guard (0 < f && f < 1)
         <|> 5 <$ guard (1 < f && f < 2)
 
-handleKeysIO :: Size -> Event -> World -> IO World
-handleKeysIO s e = pure <$> handleKeys s e
+handleKeys :: Size -> Event -> World -> IO World
+handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w = handleLeftClick k (x', y') w
+handleKeys _ (EventKey (Char 'l') Up _ _) w@(World gs _ _ (PartialCommand (Just (r, c)) (Just qId) Nothing)) =
+  return $ set command initialCommand $ set gameState newState w
+  where
+    move = Left (NormalMove (Position (r, c)) qId L)
+    (_, newState) = runState (playGame move) gs
+handleKeys _ (EventKey (Char 'r') Up _ _) w@(World gs _ _ (PartialCommand (Just (r, c)) (Just qId) Nothing)) =
+  return $ set command initialCommand $ set gameState newState w
+  where
+    move = Left (NormalMove (Position (r, c)) qId R)
+    (_, newState) = runState (playGame move) gs
+handleKeys _ _ w = return w
 
-handleKeys :: Size -> Event -> World -> World
-handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World (Just b) _ _ m (PartialCommand Nothing _ _)) =
-  fromMaybe w $ do
-    c <- getColumnIndexFromClick k x'
-    r <- getRowIndexFromClick k y'
-    return $ case step b (Right (Position (r, c))) of
-      (_, Just b) ->
-        set (command . position) (Just (r, c)) $
-          set message (Just "click on a quadrant to rotate") $
-            set board (Just b) w
-      (m, Nothing) ->
-        set command initialCommand $
-          set message (Just m) $
-            set board Nothing w
-handleKeys k (EventKey (MouseButton LeftButton) Down _ (x', y')) w@(World (Just b) _ _ _ (PartialCommand (Just pos) Nothing _)) =
-  fromMaybe w $ do
-    c <- getColumnIndexFromClick k x'
-    r <- getRowIndexFromClick k y'
-    return $
-      set (command . quadrantId) (Just (getQuadrantId (Position (r, c)))) $
-        set message (Just "click 'l' or 'r' key to \nrotate left/right") $
-          set board (Just b) w
-handleKeys k (EventKey (Char 'l') Up _ _) w@(World (Just b) _ _ _ (PartialCommand (Just (r, c)) (Just qId) Nothing)) =
-  case step b (Left (NormalMove (Position (r, c)) qId L)) of
-    (m, Just b) ->
-      set command initialCommand $
-        set message (Just m) $
-          set board (Just b) w
-    (m, Nothing) ->
-      set command initialCommand $
-        set message (Just m) $
-          set board Nothing w
-handleKeys k (EventKey (Char 'r') Up _ _) w = trace (show "right") w
-handleKeys k _ w = w
+handleBoardLeftClick :: Position -> World -> IO World
+handleBoardLeftClick pos w@(World _ _ _ (PartialCommand (Just _) Nothing _)) =
+  return $
+    set (command . quadrantId) (Just (getQuadrantId pos)) $
+      set (gameState . message) (Just "click 'l' or 'r' key to \nrotate left/right") w
+handleBoardLeftClick pos w@(World gs _ _ (PartialCommand Nothing _ _)) =
+  let (_, newState) = runState (playGame (Right pos)) gs
+   in return $
+        if view gameOver newState
+          then set gameState newState w
+          else
+            set (command . position) (Just (getPos pos)) $
+              set (gameState . message) (Just "click on a quadrant to rotate") w
 
-step :: Board -> Move -> (Message, Maybe Board)
-step b c = case applyMove b c of
-  Left message -> trace (show message) (message, Just b)
-  Right newBoard -> trace (show "verify") verifyDone c b newBoard
+handleMenuLeftClick :: Size -> (Float, Float) -> World -> IO World
+handleMenuLeftClick k (x, y) w = return w
 
-verifyDone :: Move -> Board -> Board -> (Message, Maybe Board)
+handleLeftClick :: Size -> (Float, Float) -> World -> IO World
+handleLeftClick k (x, y) w = fromMaybe (handleMenuLeftClick k (x, y) w) $ do
+  c <- getColumnIndexFromClick k x
+  r <- getRowIndexFromClick k y
+  return $ handleBoardLeftClick (Position (r, c)) w
+
+step :: Board -> Move -> (GameOver, Message, Board)
+step b m = case applyMove b m of
+  Left message -> (False, message, b)
+  Right newBoard -> verifyDone m b newBoard
+
+playGame :: Move -> State GameState GameState
+playGame move = do
+  GameState _ (History (b, m) undos) _ <- get
+  let (gameOver, message, newBoard) = step b move
+  _ <- put (GameState gameOver (History (newBoard, Just move) ((b, m) : undos)) (Just message))
+  get
+
+verifyDone :: Move -> Board -> Board -> (GameOver, Message, Board)
 verifyDone (Right _) oldBoard newBoard =
   if _player oldBoard `elem` getWinners newBoard
-    then ("Player " ++ show (_player oldBoard) ++ " won", Nothing)
-    else ("You can only omit quadrant rotation when *you* win the game", Just oldBoard)
+    then (True, "Player " ++ show (_player oldBoard) ++ " won", newBoard)
+    else (False, "You can only omit quadrant rotation when *you* win the game", oldBoard)
 verifyDone _ _ newBoard = case getWinners newBoard of
-  [_, _] -> ("You both won", Nothing)
-  [winner] -> (show winner ++ " won", Nothing)
-  _ -> ("", Just newBoard)
+  [_, _] -> (True, "You both won", newBoard)
+  [winner] -> (True, show winner ++ " won", newBoard)
+  _ -> (False, "", newBoard)
 
 stepWorld :: Float -> World -> IO World
-stepWorld _ w@(World _ _ Nothing _ _) = do
+stepWorld _ w@(World (GameState True _ _) _ _ _) = return w --gameOver
+stepWorld _ w@(World _ _ Nothing _) = do
   busy <- newMVar False
   return $ set isBusy (Just busy) w
-stepWorld f w@(World (Just b@(Board player _ _ _ _)) aiPlayer (Just busy) _ _) =
-  if trace (show "wrong player") player /= aiPlayer
+stepWorld _ w@(World gs@(GameState _ (History (b@(Board player _ _ _ _), _) _) _) aiPlayer (Just busy) _) =
+  if player /= aiPlayer
     then return w
     else do
+      -- AI's turn
       isBusy <- takeMVar busy
       putMVar busy True
       if isBusy
-        then trace (show "thinking") return w
+        then -- AI is thinking
+          return w
         else case nextAICommand aiPlayer b of
-          Nothing -> trace (show "no command") return w
-          Just c ->
+          Nothing -> trace (show "AI cannot find move...") return w
+          Just m ->
             takeMVar busy >> putMVar busy False
-              >> return
-                ( set command initialCommand $
-                    set message (Just m) $
-                      set board boar w
-                )
+              >> return newWorld
             where
-              (m, boar) = trace (show "stepping") step b c
+              (_, newState) = runState (playGame m) gs
+              newWorld = set gameState newState w
 
 runUI :: Player -> Player -> IO ()
 runUI p aiPlayer =
   let window = InWindow "Pentago" (800, 600) (10, 10)
       size = 100.0
-   in playIO window yellow 1 (emptyWorld p aiPlayer) (pure <$> drawBoard size) (handleKeysIO size) stepWorld
+   in playIO window yellow 1 (emptyWorld p aiPlayer) (pure <$> drawBoard size) (handleKeys size) stepWorld
