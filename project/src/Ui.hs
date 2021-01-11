@@ -146,7 +146,16 @@ handleKeys k (EventKey (Char 'l') Up _ _) w@(World (Just b) _ _ _ (PartialComman
       set command initialCommand $
         set message (Just m) $
           set board Nothing w
-handleKeys k (EventKey (Char 'r') Up _ _) w = trace (show "right") w
+handleKeys k (EventKey (Char 'r') Up _ _) w@(World (Just b) _ _ _ (PartialCommand (Just (r, c)) (Just qId) Nothing)) =
+  case step b (Left (NormalMove (Position (r, c)) qId R)) of
+    (m, Just b) ->
+      set command initialCommand $
+        set message (Just m) $
+          set board (Just b) w
+    (m, Nothing) ->
+      set command initialCommand $
+        set message (Just m) $
+          set board Nothing w
 handleKeys k _ w = w
 
 step :: Board -> Move -> (Message, Maybe Board)

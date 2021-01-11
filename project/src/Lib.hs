@@ -207,8 +207,8 @@ mkInitialQuadrant :: QuadrantId -> Quadrant
 mkInitialQuadrant number =
   Quadrant
     { _quadrantId = number,
-      _row1 = Row B E E,
-      _row2 = Row E E W,
+      _row1 = Row E E E,
+      _row2 = Row E E E,
       _row3 = Row E E E
     }
 
