@@ -7,4 +7,4 @@ main :: IO ()
 main =
   do
     startingPlayer <- randomPlayer
-    runUI startingPlayer (nextPlayer startingPlayer)
+    runUI (emptyWorld startingPlayer (nextPlayer startingPlayer))

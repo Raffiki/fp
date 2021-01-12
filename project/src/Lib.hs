@@ -30,6 +30,7 @@ module Lib
     getPositions,
     Position (..),
     getQuadrantId,
+    getPos,
   )
 where
 
@@ -44,6 +45,9 @@ import System.Random (Random (random, randomR), newStdGen)
 type Message = String
 
 newtype Position = Position (Int, Int) deriving (Eq, Ord)
+
+getPos :: Position -> (Int, Int)
+getPos (Position p) = p
 
 instance Show Position where
   show (Position (0, c)) = "a" ++ show (c + 1)

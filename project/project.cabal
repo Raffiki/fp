@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 00fcdeb049121a9328ccd6ee9394d9f6ad17555e7e5994ce95cf9de4cb62996b
+-- hash: a4da6a5c414821dcbaa96a81cf7d6775701fe95cf66d7a3e885f7abbc8fddb08
 
 name:           project
 version:        0.1.0.0
@@ -46,6 +46,7 @@ library
     , gloss
     , lens
     , monad-par
+    , mtl
     , parallel
     , parsec
     , random
@@ -69,6 +70,7 @@ executable project-exe
     , gloss
     , lens
     , monad-par
+    , mtl
     , parallel
     , parsec
     , project
@@ -94,6 +96,7 @@ test-suite project-test
     , gloss
     , lens
     , monad-par
+    , mtl
     , parallel
     , parsec
     , project
