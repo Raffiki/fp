@@ -9,6 +9,7 @@ import Control.Lens (Lens', makeLenses, over, set, view)
 import Control.Lens.TH ()
 import Control.Monad.State
 import Data.Either
+import Data.List.Extra
 import Data.Maybe
 import Debug.Trace
 import Errors
@@ -92,12 +93,13 @@ drawBoard :: Size -> World -> Picture
 drawBoard k (World (GameState True _ (Just m)) aiPlayer _ _) = Pictures [toptext, drawText k m]
   where
     toptext = topText k aiPlayer
-drawBoard k (World (GameState False (History (b, _) _) m) aiPlayer _ _) = Pictures $ load : grid : toptext : message ++ bs ++ ws
+drawBoard k (World (GameState False (History (b, _) history) m) aiPlayer _ _) = Pictures $ load : grid : toptext : message ++ bs ++ ws ++ saveButton
   where
     toptext = topText k aiPlayer
     message = maybeToList $ fmap (drawText k) m
     bs = drawCircle k black . snd <$> (\(p, c) -> p == Black) `filter` getPlayerCoordinates b
     ws = drawCircle k white . snd <$> (\(p, c) -> p == White) `filter` getPlayerCoordinates b
+    saveButton = [save | _player b /= aiPlayer && notNull history]
 
     load :: Picture
     load =
@@ -110,6 +112,18 @@ drawBoard k (World (GameState False (History (b, _) _) m) aiPlayer _ _) = Pictur
               [(2.1, -2.4), (2.9, -2.4)],
               [(2.1, -2.9), (2.1, -2.4)],
               [(2.9, -2.4), (2.9, -2.9)]
+            ]
+    save :: Picture
+    save =
+      color black $
+        Pictures $
+          color black (translate (2.2 * k) (-2.0 * k) $ scale 0.1 0.1 $ text "SAVE") :
+          fmap
+            (line . resize k)
+            [ [(2.1, -1.8), (2.9, -1.8)],
+              [(2.1, -2.3), (2.9, -2.3)],
+              [(2.1, -1.8), (2.1, -2.3)],
+              [(2.9, -2.3), (2.9, -1.8)]
             ]
 
     grid :: Picture
@@ -194,6 +208,7 @@ loadSavedWorld w = do
         applyMoves (a :> as) world = applyMoves as $ set gameState (execState (playGame (Left a)) (view gameState world)) world
 
 historyToMoveSequence :: History (Board, Maybe Move) -> MoveSequence
+historyToMoveSequence (History (b, Nothing) []) = Empty
 historyToMoveSequence (History (b, Just (Left move)) moves) = foldr (:>) (move :> Empty) (lefts (catMaybes (snd <$> moves)))
 historyToMoveSequence (History (b, Just (Right endMove)) moves) = foldr (:>) (previousMove :> End endMove) previousMoves
   where
