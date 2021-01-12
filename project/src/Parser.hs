@@ -1,6 +1,6 @@
-module Parser where
+module Parser (readFromFile) where
 
-import Control.Monad.Trans.Except
+import Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT)
 import Data.Either.Combinators
 import Errors
 import Files

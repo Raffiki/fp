@@ -1,7 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Ui (runUI) where
+module Ui (runUI, emptyWorld) where
 
 import Control.Applicative
 import Control.Concurrent
@@ -10,10 +10,12 @@ import Control.Lens.TH ()
 import Control.Monad.State
 import Data.Maybe
 import Debug.Trace
+import Errors
 import Exploration
 import Graphics.Gloss
 import Graphics.Gloss.Interface.IO.Game
 import Lib
+import Parser
 
 type Coordinates = (Float, Float)
 
@@ -177,11 +179,23 @@ handleBoardLeftClick pos w@(World gs _ _ (PartialCommand Nothing _ _)) =
             set (command . position) (Just (getPos pos)) $
               set (gameState . message) (Just "click on a quadrant to rotate") w
 
-handleMenuLeftClick :: Size -> (Float, Float) -> World -> IO World
-handleMenuLeftClick k (x, y) w = return w
+loadSavedWorld :: World -> IO World
+loadSavedWorld w = do
+  result <- readFromFile
+  return $ case result of
+    Left (MissingFileError e) -> set (gameState . message) (Just e) w
+    Left (AppParseError e) -> set (gameState . message) (Just e) w
+    Right (player, layer, moveSequence) -> w
+
+handleMenuLeftClick :: (Float, Float) -> World -> IO World
+handleMenuLeftClick (x, y) w = handleClick
+  where
+    handleClick
+      | x > 2.1 && x < 2.9 && y > -2.9 && y < -2.4 = loadSavedWorld w
+      | otherwise = return w
 
 handleLeftClick :: Size -> (Float, Float) -> World -> IO World
-handleLeftClick k (x, y) w = fromMaybe (handleMenuLeftClick k (x, y) w) $ do
+handleLeftClick k (x, y) w = fromMaybe (handleMenuLeftClick (x / k, y / k) w) $ do
   c <- getColumnIndexFromClick k x
   r <- getRowIndexFromClick k y
   return $ handleBoardLeftClick (Position (r, c)) w
@@ -232,8 +246,8 @@ stepWorld _ w@(World gs@(GameState _ (History (b@(Board player _ _ _ _), _) _) _
               (_, newState) = runState (playGame m) gs
               newWorld = set gameState newState w
 
-runUI :: Player -> Player -> IO ()
-runUI p aiPlayer =
+runUI :: World -> IO ()
+runUI world =
   let window = InWindow "Pentago" (800, 600) (10, 10)
       size = 100.0
-   in playIO window yellow 1 (emptyWorld p aiPlayer) (pure <$> drawBoard size) (handleKeys size) stepWorld
+   in playIO window yellow 1 world (pure <$> drawBoard size) (handleKeys size) stepWorld
