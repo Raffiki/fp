@@ -183,10 +183,15 @@ handleBoardLeftClick pos w@(World gs _ _ (PartialCommand Nothing _ _)) =
 loadSavedWorld :: World -> IO World
 loadSavedWorld w = do
   result <- readFromFile
-  return $ case result of
+  return $ case trace (show result) result of
     Left (MissingFileError e) -> set (gameState . message) (Just e) w
     Left (AppParseError e) -> set (gameState . message) (Just e) w
-    Right (humanPlayer, startPlayer, moveSequence) -> emptyWorld humanPlayer humanPlayer
+    Right (humanPlayer, startPlayer, moves) -> applyMoves moves (emptyWorld humanPlayer humanPlayer)
+      where
+        applyMoves :: MoveSequence -> World -> World
+        applyMoves (a :> Empty) world = world
+        applyMoves (a :> End p) world = set gameState (execState (playGame (Right p)) (view gameState world)) world
+        applyMoves (a :> as) world = applyMoves as $ set gameState (execState (playGame (Left a)) (view gameState world)) world
 
 historyToMoveSequence :: History (Board, Maybe Move) -> MoveSequence
 historyToMoveSequence (History (b, Just (Left move)) moves) = foldr (:>) (move :> Empty) (lefts (catMaybes (snd <$> moves)))
